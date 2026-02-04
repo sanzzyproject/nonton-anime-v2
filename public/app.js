@@ -21,9 +21,8 @@ async function loadLatest() {
         const data = await res.json();
         
         // Membagi data untuk UI: 5 item pertama jadi "Trending", sisanya "Grid"
-        // Karena API anime-terbaru mengembalikan list mix, kita anggap 5 teratas sedang trending
         const trendingData = data.slice(0, 5); 
-        const latestData = data; // Tampilkan semua di grid bawah juga agar lengkap
+        const latestData = data; 
 
         renderTrending(trendingData);
         renderGrid(latestData);
@@ -79,7 +78,7 @@ async function handleSearch() {
 
         // Kosongkan trending saat mode cari
         document.getElementById('trending-list').innerHTML = '';
-        document.querySelector('.section-header').classList.add('hidden'); // Sembunyikan header trending
+        document.querySelector('.section-header').classList.add('hidden'); 
         
         // Ubah judul grid
         const gridHeader = document.querySelectorAll('.section-header')[1];
@@ -90,7 +89,7 @@ async function handleSearch() {
             title: item.title,
             image: item.image,
             url: item.url,
-            episode: item.score // Search result biasanya return score/type, kita tempel di badge
+            episode: item.score 
         }));
 
         renderGrid(formattedData);
@@ -126,13 +125,12 @@ async function loadDetail(url) {
             </div>
         `;
 
-        // Render Episode Grid (Kotak-kotak kecil angka saja atau text pendek)
+        // Render Episode Grid 
         const epGrid = document.getElementById('episode-grid');
         epGrid.innerHTML = data.episodes.map(ep => {
-            // Coba ambil nomor episode saja dari judul misal "Episode 12" -> "12"
             let epNum = ep.title.match(/Episode\s+(\d+)/i);
             let displayTitle = epNum ? epNum[1] : ep.title.replace('Episode', '').trim();
-            if(displayTitle.length > 5) displayTitle = 'Ep'; // Fallback jika text kepanjangan
+            if(displayTitle.length > 5) displayTitle = 'Ep'; 
 
             return `<div class="ep-box" onclick="loadVideo('${ep.url}')">${displayTitle}</div>`;
         }).join('');
@@ -187,7 +185,6 @@ function changeServer(url, btn) {
 
 // Navigasi Balik
 function goHome() {
-    // Reset UI state
     document.querySelector('.section-header').classList.remove('hidden');
     document.querySelectorAll('.section-header')[1].querySelector('h2').innerText = 'Rilisan Terbaru';
     loadLatest();
@@ -196,7 +193,17 @@ function goHome() {
 function backToDetail() {
     hide('watch-view');
     show('detail-view');
-    document.getElementById('video-player').src = ''; // Stop video
+    document.getElementById('video-player').src = ''; 
+}
+
+// --- SIDEBAR UI LOGIC ---
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    
+    // Toggle class active
+    sidebar.classList.toggle('active');
+    overlay.classList.toggle('active');
 }
 
 // Init
