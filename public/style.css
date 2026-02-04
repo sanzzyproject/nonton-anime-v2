@@ -1,0 +1,138 @@
+:root {
+    --bg-color: #0f172a;
+    --card-bg: #1e293b;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --accent: #0ea5e9; /* Biru Neon */
+    --accent-hover: #0284c7;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Outfit', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+/* Navbar */
+.navbar {
+    background: rgba(15, 23, 42, 0.95);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-bottom: 1px solid #334155;
+    backdrop-filter: blur(10px);
+}
+
+.logo { font-size: 1.5rem; font-weight: 700; letter-spacing: 1px; }
+.highlight { color: var(--accent); }
+
+.search-box { display: flex; gap: 10px; }
+.search-box input {
+    background: var(--card-bg);
+    border: 1px solid #334155;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    color: white;
+    outline: none;
+}
+.search-box button {
+    background: var(--accent);
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+/* Layout */
+main { padding: 2rem; max-width: 1200px; margin: 0 auto; min-height: 80vh; }
+.section-title { margin-bottom: 1.5rem; border-left: 4px solid var(--accent); padding-left: 10px; }
+
+/* Grid System */
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1.5rem;
+}
+
+/* Anime Card */
+.card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+}
+.card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+.card img { width: 100%; height: 240px; object-fit: cover; }
+.card-content { padding: 10px; }
+.card-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.card-ep { font-size: 0.75rem; color: var(--accent); background: rgba(14, 165, 233, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-block; }
+
+/* Detail View */
+.hidden { display: none !important; }
+.back-btn { background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-bottom: 20px; }
+
+.detail-header { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 2rem; }
+.detail-cover { width: 220px; border-radius: 12px; box-shadow: 0 0 20px rgba(14, 165, 233, 0.2); }
+.detail-meta h1 { font-size: 2rem; margin-bottom: 1rem; }
+.detail-info p { color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 0.9rem; }
+
+.episode-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+.ep-btn {
+    background: var(--card-bg);
+    border: 1px solid #334155;
+    color: var(--text-primary);
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    font-size: 0.9rem;
+}
+.ep-btn:hover { background: var(--accent); border-color: var(--accent); }
+
+/* Player */
+.video-container {
+    position: relative;
+    padding-bottom: 56.25%; /* 16:9 */
+    height: 0;
+    background: black;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+.video-container iframe {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%; border: none;
+}
+.server-list { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.server-btn {
+    padding: 8px 15px;
+    background: #334155;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+.server-btn.active { background: var(--accent); }
+
+/* Loading */
+.spinner {
+    border: 4px solid rgba(255,255,255,0.1);
+    border-left-color: var(--accent);
+    border-radius: 50%;
+    width: 40px; height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 50px auto;
+}
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+@media (max-width: 600px) {
+    .detail-header { flex-direction: column; align-items: center; text-align: center; }
+}
