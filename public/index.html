@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AniStream 2026</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">ANI<span class="highlight">STREAM</span></div>
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Cari anime...">
+            <button onclick="handleSearch()">🔍</button>
+        </div>
+    </nav>
+
+    <main id="app">
+        <div id="loading" class="hidden">
+            <div class="spinner"></div>
+        </div>
+        
+        <div id="home-view">
+            <h2 class="section-title">Update Terbaru</h2>
+            <div class="grid-container" id="latest-grid"></div>
+        </div>
+
+        <div id="detail-view" class="hidden">
+            <button class="back-btn" onclick="goHome()">← Kembali</button>
+            <div id="anime-info"></div>
+            <h3>Daftar Episode</h3>
+            <div class="episode-list" id="episode-grid"></div>
+        </div>
+
+        <div id="watch-view" class="hidden">
+            <button class="back-btn" onclick="backToDetail()">← List Episode</button>
+            <div class="video-container">
+                <iframe id="video-player" src="" allowfullscreen></iframe>
+            </div>
+            <h2 id="video-title"></h2>
+            <div class="server-list" id="server-options"></div>
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
