@@ -1,45 +1,69 @@
-const API_BASE = '/api'; // Mengarah ke folder api/index.js via Vercel Rewrites
-let currentAnimeDetail = null;
+const API_BASE = '/api'; 
 
-// Helper untuk menampilkan elemen
+// Utility
 const show = (id) => document.getElementById(id).classList.remove('hidden');
 const hide = (id) => document.getElementById(id).classList.add('hidden');
 const loader = (state) => state ? show('loading') : hide('loading');
 
-// Fungsi Utama: Load Terbaru
+// --- LOAD DATA UTAMA ---
 async function loadLatest() {
     loader(true);
     hide('detail-view');
     hide('watch-view');
     show('home-view');
+    
+    // Reset konten
+    document.getElementById('trending-list').innerHTML = '';
+    document.getElementById('latest-grid').innerHTML = '';
 
     try {
         const res = await fetch(`${API_BASE}/latest`);
         const data = await res.json();
-        renderGrid(data);
+        
+        // Membagi data untuk UI: 5 item pertama jadi "Trending", sisanya "Grid"
+        // Karena API anime-terbaru mengembalikan list mix, kita anggap 5 teratas sedang trending
+        const trendingData = data.slice(0, 5); 
+        const latestData = data; // Tampilkan semua di grid bawah juga agar lengkap
+
+        renderTrending(trendingData);
+        renderGrid(latestData);
+
     } catch (err) {
         console.error(err);
-        alert('Gagal memuat data. Coba refresh.');
+        alert('Gagal memuat data. Periksa koneksi internet.');
     } finally {
         loader(false);
     }
 }
 
-// Render Kartu Anime
-function renderGrid(data) {
-    const grid = document.getElementById('latest-grid');
-    grid.innerHTML = data.map(anime => `
-        <div class="card" onclick="loadDetail('${anime.url}')">
+// Render Bagian Trending (Horizontal Scroll)
+function renderTrending(data) {
+    const container = document.getElementById('trending-list');
+    container.innerHTML = data.map(anime => `
+        <div class="trending-card" onclick="loadDetail('${anime.url}')">
             <img src="${anime.image}" alt="${anime.title}" loading="lazy">
-            <div class="card-content">
-                <h3 class="card-title">${anime.title}</h3>
-                <span class="card-ep">Ep ${anime.episode || '?'}</span>
+            <div class="trending-overlay">
+                <div class="trending-title">${anime.title}</div>
             </div>
         </div>
     `).join('');
 }
 
-// Fungsi Pencarian
+// Render Bagian Grid (Rilisan Terbaru)
+function renderGrid(data) {
+    const container = document.getElementById('latest-grid');
+    container.innerHTML = data.map(anime => `
+        <div class="anime-card" onclick="loadDetail('${anime.url}')">
+            <div class="card-image-wrapper">
+                <img src="${anime.image}" alt="${anime.title}" loading="lazy">
+                <div class="ep-badge">Ep ${anime.episode || '?'}</div>
+            </div>
+            <h3 class="card-title">${anime.title}</h3>
+        </div>
+    `).join('');
+}
+
+// --- PENCARIAN ---
 async function handleSearch() {
     const query = document.getElementById('searchInput').value;
     if (!query) return loadLatest();
@@ -49,18 +73,26 @@ async function handleSearch() {
         const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
         const data = await res.json();
         
-        // Sesuaikan struktur data search yang sedikit berbeda
+        hide('detail-view');
+        hide('watch-view');
+        show('home-view');
+
+        // Kosongkan trending saat mode cari
+        document.getElementById('trending-list').innerHTML = '';
+        document.querySelector('.section-header').classList.add('hidden'); // Sembunyikan header trending
+        
+        // Ubah judul grid
+        const gridHeader = document.querySelectorAll('.section-header')[1];
+        gridHeader.querySelector('h2').innerText = `Hasil: "${query}"`;
+        
+        // Format data search agar cocok dengan grid
         const formattedData = data.map(item => ({
             title: item.title,
             image: item.image,
             url: item.url,
-            episode: item.score // Search result pakai score, bukan episode
+            episode: item.score // Search result biasanya return score/type, kita tempel di badge
         }));
-        
-        hide('detail-view');
-        hide('watch-view');
-        show('home-view');
-        document.querySelector('.section-title').innerText = `Hasil Pencarian: ${query}`;
+
         renderGrid(formattedData);
     } catch (err) {
         console.error(err);
@@ -69,14 +101,13 @@ async function handleSearch() {
     }
 }
 
-// Load Detail Anime
+// --- DETAIL ANIME ---
 async function loadDetail(url) {
     loader(true);
     try {
         const res = await fetch(`${API_BASE}/detail?url=${encodeURIComponent(url)}`);
         const data = await res.json();
-        currentAnimeDetail = data;
-
+        
         hide('home-view');
         hide('watch-view');
         show('detail-view');
@@ -84,25 +115,27 @@ async function loadDetail(url) {
         // Render Info
         document.getElementById('anime-info').innerHTML = `
             <div class="detail-header">
-                <img src="${data.image}" class="detail-cover">
-                <div class="detail-meta">
+                <img src="${data.image}" class="detail-poster">
+                <div class="detail-text">
                     <h1>${data.title}</h1>
-                    <div class="detail-info">
-                        <p>${data.description.substring(0, 300)}...</p>
-                        <p><strong>Status:</strong> ${data.info.status || '-'}</p>
-                        <p><strong>Genre:</strong> ${data.info.genre || '-'}</p>
+                    <div class="detail-meta">
+                        <span>${data.info.genre || 'Anime'}</span> • <span>${data.info.status || 'Ongoing'}</span>
                     </div>
+                    <p class="desc">${data.description || 'Tidak ada deskripsi.'}</p>
                 </div>
             </div>
         `;
 
-        // Render Episodes
+        // Render Episode Grid (Kotak-kotak kecil angka saja atau text pendek)
         const epGrid = document.getElementById('episode-grid');
-        epGrid.innerHTML = data.episodes.map(ep => `
-            <div class="ep-btn" onclick="loadVideo('${ep.url}')">
-                ${ep.title}
-            </div>
-        `).join('');
+        epGrid.innerHTML = data.episodes.map(ep => {
+            // Coba ambil nomor episode saja dari judul misal "Episode 12" -> "12"
+            let epNum = ep.title.match(/Episode\s+(\d+)/i);
+            let displayTitle = epNum ? epNum[1] : ep.title.replace('Episode', '').trim();
+            if(displayTitle.length > 5) displayTitle = 'Ep'; // Fallback jika text kepanjangan
+
+            return `<div class="ep-box" onclick="loadVideo('${ep.url}')">${displayTitle}</div>`;
+        }).join('');
 
     } catch (err) {
         console.error(err);
@@ -111,7 +144,7 @@ async function loadDetail(url) {
     }
 }
 
-// Load Video Player
+// --- NONTON VIDEO ---
 async function loadVideo(url) {
     loader(true);
     try {
@@ -123,22 +156,20 @@ async function loadVideo(url) {
 
         document.getElementById('video-title').innerText = data.title;
         
-        const serverContainer = document.getElementById('server-options');
         const player = document.getElementById('video-player');
+        const serverContainer = document.getElementById('server-options');
 
         if (data.streams.length > 0) {
-            // Default putar server pertama
             player.src = data.streams[0].url;
-
-            // Render tombol server
+            
             serverContainer.innerHTML = data.streams.map((stream, index) => `
-                <div class="server-btn ${index === 0 ? 'active' : ''}" 
+                <button class="server-tag ${index === 0 ? 'active' : ''}" 
                      onclick="changeServer('${stream.url}', this)">
                      ${stream.server}
-                </div>
+                </button>
             `).join('');
         } else {
-            alert('Video tidak ditemukan :(');
+            alert('Maaf, stream belum tersedia untuk episode ini.');
         }
 
     } catch (err) {
@@ -150,26 +181,26 @@ async function loadVideo(url) {
 
 function changeServer(url, btn) {
     document.getElementById('video-player').src = url;
-    document.querySelectorAll('.server-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.server-tag').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
 }
 
-// Navigasi
+// Navigasi Balik
 function goHome() {
-    document.querySelector('.section-title').innerText = 'Update Terbaru';
+    // Reset UI state
+    document.querySelector('.section-header').classList.remove('hidden');
+    document.querySelectorAll('.section-header')[1].querySelector('h2').innerText = 'Rilisan Terbaru';
     loadLatest();
 }
 
 function backToDetail() {
     hide('watch-view');
     show('detail-view');
-    // Hentikan video saat kembali
-    document.getElementById('video-player').src = '';
+    document.getElementById('video-player').src = ''; // Stop video
 }
 
 // Init
 document.addEventListener('DOMContentLoaded', loadLatest);
-// Enter di search box
 document.getElementById('searchInput').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleSearch();
 });
