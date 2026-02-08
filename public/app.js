@@ -1,15 +1,37 @@
 const API_BASE = '/api'; 
 
-// --- KONFIGURASI GENRE BERANDA ---
-// Tambahkan atau ganti genre di sini sesuai keinginan
+// --- KONFIGURASI GENRE BERANDA (SMART KEYWORDS) ---
+// Kita menggunakan array 'queries' untuk menggabungkan banyak hasil pencarian
+// agar list menjadi penuh dan tidak hanya berisi 1 item.
 const HOME_SECTIONS = [
-    { title: "Sedang Hangat 🔥", query: "latest" }, // Spesial: query 'latest' pakai endpoint latest
-    { title: "Isekai World 🌀", query: "isekai" },
-    { title: "Romance & Drama ❤️", query: "romance" },
-    { title: "Action Packed ⚔️", query: "action" },
-    { title: "Fantasy Magic ✨", query: "fantasy" },
-    { title: "School Life 🏫", query: "school" },
-    { title: "Comedy 😂", query: "comedy" }
+    { 
+        title: "Sedang Hangat 🔥", 
+        mode: "latest" // Mode khusus untuk mengambil update terbaru
+    },
+    { 
+        title: "Isekai & Fantasy 🌀", 
+        queries: ["isekai", "reincarnation", "world", "maou"] 
+    },
+    { 
+        title: "Action Hits ⚔️", 
+        queries: ["kimetsu", "jujutsu", "piece", "bleach", "hunter", "shingeki"] 
+    },
+    { 
+        title: "Romance & Drama ❤️", 
+        queries: ["love", "kanojo", "romance", "heroine", "uso"] 
+    },
+    { 
+        title: "School Life 🏫", 
+        queries: ["school", "gakuen", "classroom", "high school"] 
+    },
+    { 
+        title: "Magic & Adventure ✨", 
+        queries: ["magic", "adventure", "dragon", "dungeon"] 
+    },
+    { 
+        title: "Comedy & Chill 😂", 
+        queries: ["comedy", "slice of life", "bocchi", "spy"] 
+    }
 ];
 
 // Utility
@@ -17,7 +39,7 @@ const show = (id) => document.getElementById(id).classList.remove('hidden');
 const hide = (id) => document.getElementById(id).classList.add('hidden');
 const loader = (state) => state ? show('loading') : hide('loading');
 
-// --- LOAD DATA HOME (MULTI SECTION) ---
+// --- LOAD DATA HOME (MULTI QUERY & MERGE) ---
 async function loadLatest() {
     loader(true);
     hide('detail-view');
@@ -28,38 +50,59 @@ async function loadLatest() {
     homeContainer.innerHTML = ''; // Reset konten
 
     try {
-        // Kita loop array HOME_SECTIONS dan fetch data untuk tiap bagian
-        // Menggunakan Promise.all agar loading paralel (lebih cepat)
-        /* CATATAN PENTING: 
-           Karena API backend tidak boleh diubah dan saya tidak tahu apakah ada endpoint khusus genre,
-           saya menggunakan trik: untuk genre spesifik, saya menggunakan endpoint 'search' yang sudah ada.
-        */
-
+        // Loop setiap section yang ada di konfigurasi
         for (const section of HOME_SECTIONS) {
-            let data = [];
-            
-            if (section.query === 'latest') {
-                // Fetch Endpoint Latest (Bawaan)
-                const res = await fetch(`${API_BASE}/latest`);
-                data = await res.json();
+            let combinedData = [];
+
+            if (section.mode === 'latest') {
+                // Fetch Endpoint Latest (Khusus Trending)
+                try {
+                    const res = await fetch(`${API_BASE}/latest`);
+                    combinedData = await res.json();
+                } catch (e) { console.error("Gagal load latest", e); }
             } else {
-                // Fetch Endpoint Search untuk simulasi Genre
-                const res = await fetch(`${API_BASE}/search?q=${section.query}`);
-                data = await res.json();
+                // Fetch Multi-Query (Gabungkan hasil dari beberapa kata kunci)
+                // Kita gunakan Promise.all agar semua request berjalan bersamaan (cepat)
+                const promises = section.queries.map(q => 
+                    fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`)
+                        .then(res => res.json())
+                        .catch(() => [])
+                );
+
+                const results = await Promise.all(promises);
+                
+                // Gabungkan semua array hasil pencarian menjadi satu array besar
+                results.forEach(list => {
+                    if(Array.isArray(list)) combinedData = [...combinedData, ...list];
+                });
+
+                // Hapus Duplikat (Karena mungkin 1 anime muncul di 2 kata kunci berbeda)
+                combinedData = removeDuplicates(combinedData, 'url');
             }
 
-            // Jika ada data, render sectionnya
-            if (data && data.length > 0) {
-                renderSection(section.title, data, homeContainer);
+            // Render hanya jika ada data
+            // Jika data kurang dari 5, kita duplikasi agar tampilan tetap penuh (Visual Hack)
+            if (combinedData && combinedData.length > 0) {
+                // Jika item kurang dari 6, duplikasi list tersebut agar scroll horizontal terlihat bagus
+                if (combinedData.length < 6) {
+                    combinedData = [...combinedData, ...combinedData, ...combinedData]; 
+                }
+                
+                // Limit maksimal 15 item agar tidak terlalu berat loading gambarnya
+                renderSection(section.title, combinedData.slice(0, 15), homeContainer);
             }
         }
 
     } catch (err) {
         console.error(err);
-        // alert('Gagal memuat sebagian data. Periksa koneksi internet.');
     } finally {
         loader(false);
     }
+}
+
+// Fungsi Helper Hapus Duplikat
+function removeDuplicates(array, key) {
+    return [ ...new Map(array.map(item => [item[key], item])).values() ];
 }
 
 // Fungsi Render Satu Section (Horizontal Scroll)
@@ -68,6 +111,10 @@ function renderSection(title, data, container) {
     const sectionDiv = document.createElement('div');
     sectionDiv.className = 'category-section';
 
+    // Tentukan kata kunci pencarian untuk tombol "Lainnya"
+    // Ambil kata kunci pertama dari array atau judul
+    const searchKeyword = title.split(' ')[0];
+
     // Buat Header (Judul + Tombol More)
     const headerHtml = `
         <div class="header-flex">
@@ -75,15 +122,15 @@ function renderSection(title, data, container) {
                 <div class="bar-accent"></div>
                 <h2>${title}</h2>
             </div>
-            <a href="#" class="more-link" onclick="handleSearch('${title.split(' ')[0]}')">Lainnya</a>
+            <a href="#" class="more-link" onclick="handleSearch('${searchKeyword}')">Lainnya</a>
         </div>
     `;
 
     // Buat Container Scroll Horizontal
-    // Mapping data: sesuaikan properti karena output endpoint search & latest kadang beda field score/episode
     const cardsHtml = data.map(anime => {
-        // Normalisasi data agar aman
+        // Normalisasi data
         const eps = anime.episode || anime.score || '?'; 
+        const displayTitle = anime.title.length > 35 ? anime.title.substring(0, 35) + '...' : anime.title;
         
         return `
         <div class="scroll-card" onclick="loadDetail('${anime.url}')">
@@ -91,7 +138,7 @@ function renderSection(title, data, container) {
                 <img src="${anime.image}" alt="${anime.title}" loading="lazy">
                 <div class="ep-badge">Ep ${eps}</div>
             </div>
-            <div class="scroll-card-title">${anime.title}</div>
+            <div class="scroll-card-title">${displayTitle}</div>
         </div>
         `;
     }).join('');
@@ -100,14 +147,13 @@ function renderSection(title, data, container) {
     container.appendChild(sectionDiv);
 }
 
-// --- PENCARIAN (Menampilkan Grid) ---
+// --- PENCARIAN (Grid View) ---
 async function handleSearch(manualQuery = null) {
     const searchInput = document.getElementById('searchInput');
     const query = manualQuery || searchInput.value;
     
     if (!query) return loadLatest();
     
-    // Set value input jika dipanggil manual (dari tombol More)
     if(manualQuery) searchInput.value = manualQuery;
 
     loader(true);
@@ -120,9 +166,8 @@ async function handleSearch(manualQuery = null) {
         show('home-view');
 
         const homeContainer = document.getElementById('home-view');
-        homeContainer.innerHTML = ''; // Hapus tampilan home scroll
+        homeContainer.innerHTML = ''; 
 
-        // Buat tampilan Grid untuk hasil search
         const resultSection = document.createElement('div');
         resultSection.className = 'search-results-container';
         
@@ -164,7 +209,6 @@ async function loadDetail(url) {
         hide('watch-view');
         show('detail-view');
 
-        // Render Info
         document.getElementById('anime-info').innerHTML = `
             <div class="detail-header">
                 <img src="${data.image}" class="detail-poster">
@@ -178,7 +222,6 @@ async function loadDetail(url) {
             </div>
         `;
 
-        // Render Episode Grid 
         const epGrid = document.getElementById('episode-grid');
         epGrid.innerHTML = data.episodes.map(ep => {
             let epNum = ep.title.match(/Episode\s+(\d+)/i);
@@ -236,18 +279,15 @@ function changeServer(url, btn) {
     btn.classList.add('active');
 }
 
-// Navigasi Balik
-function goHome() {
-    loadLatest(); // Reload halaman utama untuk kembali ke tampilan section
-}
-
+// Navigasi
+function goHome() { loadLatest(); }
 function backToDetail() {
     hide('watch-view');
     show('detail-view');
     document.getElementById('video-player').src = ''; 
 }
 
-// --- SIDEBAR UI LOGIC ---
+// Sidebar
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebar-overlay');
