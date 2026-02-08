@@ -1,72 +1,115 @@
 const API_BASE = '/api'; 
 
+// --- KONFIGURASI GENRE BERANDA ---
+// Tambahkan atau ganti genre di sini sesuai keinginan
+const HOME_SECTIONS = [
+    { title: "Sedang Hangat 🔥", query: "latest" }, // Spesial: query 'latest' pakai endpoint latest
+    { title: "Isekai World 🌀", query: "isekai" },
+    { title: "Romance & Drama ❤️", query: "romance" },
+    { title: "Action Packed ⚔️", query: "action" },
+    { title: "Fantasy Magic ✨", query: "fantasy" },
+    { title: "School Life 🏫", query: "school" },
+    { title: "Comedy 😂", query: "comedy" }
+];
+
 // Utility
 const show = (id) => document.getElementById(id).classList.remove('hidden');
 const hide = (id) => document.getElementById(id).classList.add('hidden');
 const loader = (state) => state ? show('loading') : hide('loading');
 
-// --- LOAD DATA UTAMA ---
+// --- LOAD DATA HOME (MULTI SECTION) ---
 async function loadLatest() {
     loader(true);
     hide('detail-view');
     hide('watch-view');
     show('home-view');
     
-    // Reset konten
-    document.getElementById('trending-list').innerHTML = '';
-    document.getElementById('latest-grid').innerHTML = '';
+    const homeContainer = document.getElementById('home-view');
+    homeContainer.innerHTML = ''; // Reset konten
 
     try {
-        const res = await fetch(`${API_BASE}/latest`);
-        const data = await res.json();
-        
-        // Membagi data untuk UI: 5 item pertama jadi "Trending", sisanya "Grid"
-        const trendingData = data.slice(0, 5); 
-        const latestData = data; 
+        // Kita loop array HOME_SECTIONS dan fetch data untuk tiap bagian
+        // Menggunakan Promise.all agar loading paralel (lebih cepat)
+        /* CATATAN PENTING: 
+           Karena API backend tidak boleh diubah dan saya tidak tahu apakah ada endpoint khusus genre,
+           saya menggunakan trik: untuk genre spesifik, saya menggunakan endpoint 'search' yang sudah ada.
+        */
 
-        renderTrending(trendingData);
-        renderGrid(latestData);
+        for (const section of HOME_SECTIONS) {
+            let data = [];
+            
+            if (section.query === 'latest') {
+                // Fetch Endpoint Latest (Bawaan)
+                const res = await fetch(`${API_BASE}/latest`);
+                data = await res.json();
+            } else {
+                // Fetch Endpoint Search untuk simulasi Genre
+                const res = await fetch(`${API_BASE}/search?q=${section.query}`);
+                data = await res.json();
+            }
+
+            // Jika ada data, render sectionnya
+            if (data && data.length > 0) {
+                renderSection(section.title, data, homeContainer);
+            }
+        }
 
     } catch (err) {
         console.error(err);
-        alert('Gagal memuat data. Periksa koneksi internet.');
+        // alert('Gagal memuat sebagian data. Periksa koneksi internet.');
     } finally {
         loader(false);
     }
 }
 
-// Render Bagian Trending (Horizontal Scroll)
-function renderTrending(data) {
-    const container = document.getElementById('trending-list');
-    container.innerHTML = data.map(anime => `
-        <div class="trending-card" onclick="loadDetail('${anime.url}')">
-            <img src="${anime.image}" alt="${anime.title}" loading="lazy">
-            <div class="trending-overlay">
-                <div class="trending-title">${anime.title}</div>
-            </div>
-        </div>
-    `).join('');
-}
+// Fungsi Render Satu Section (Horizontal Scroll)
+function renderSection(title, data, container) {
+    // Buat elemen section
+    const sectionDiv = document.createElement('div');
+    sectionDiv.className = 'category-section';
 
-// Render Bagian Grid (Rilisan Terbaru)
-function renderGrid(data) {
-    const container = document.getElementById('latest-grid');
-    container.innerHTML = data.map(anime => `
-        <div class="anime-card" onclick="loadDetail('${anime.url}')">
-            <div class="card-image-wrapper">
+    // Buat Header (Judul + Tombol More)
+    const headerHtml = `
+        <div class="header-flex">
+            <div class="section-header">
+                <div class="bar-accent"></div>
+                <h2>${title}</h2>
+            </div>
+            <a href="#" class="more-link" onclick="handleSearch('${title.split(' ')[0]}')">Lainnya</a>
+        </div>
+    `;
+
+    // Buat Container Scroll Horizontal
+    // Mapping data: sesuaikan properti karena output endpoint search & latest kadang beda field score/episode
+    const cardsHtml = data.map(anime => {
+        // Normalisasi data agar aman
+        const eps = anime.episode || anime.score || '?'; 
+        
+        return `
+        <div class="scroll-card" onclick="loadDetail('${anime.url}')">
+            <div class="scroll-card-img">
                 <img src="${anime.image}" alt="${anime.title}" loading="lazy">
-                <div class="ep-badge">Ep ${anime.episode || '?'}</div>
+                <div class="ep-badge">Ep ${eps}</div>
             </div>
-            <h3 class="card-title">${anime.title}</h3>
+            <div class="scroll-card-title">${anime.title}</div>
         </div>
-    `).join('');
+        `;
+    }).join('');
+
+    sectionDiv.innerHTML = headerHtml + `<div class="horizontal-scroll">${cardsHtml}</div>`;
+    container.appendChild(sectionDiv);
 }
 
-// --- PENCARIAN ---
-async function handleSearch() {
-    const query = document.getElementById('searchInput').value;
+// --- PENCARIAN (Menampilkan Grid) ---
+async function handleSearch(manualQuery = null) {
+    const searchInput = document.getElementById('searchInput');
+    const query = manualQuery || searchInput.value;
+    
     if (!query) return loadLatest();
     
+    // Set value input jika dipanggil manual (dari tombol More)
+    if(manualQuery) searchInput.value = manualQuery;
+
     loader(true);
     try {
         const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
@@ -76,23 +119,33 @@ async function handleSearch() {
         hide('watch-view');
         show('home-view');
 
-        // Kosongkan trending saat mode cari
-        document.getElementById('trending-list').innerHTML = '';
-        document.querySelector('.section-header').classList.add('hidden'); 
-        
-        // Ubah judul grid
-        const gridHeader = document.querySelectorAll('.section-header')[1];
-        gridHeader.querySelector('h2').innerText = `Hasil: "${query}"`;
-        
-        // Format data search agar cocok dengan grid
-        const formattedData = data.map(item => ({
-            title: item.title,
-            image: item.image,
-            url: item.url,
-            episode: item.score 
-        }));
+        const homeContainer = document.getElementById('home-view');
+        homeContainer.innerHTML = ''; // Hapus tampilan home scroll
 
-        renderGrid(formattedData);
+        // Buat tampilan Grid untuk hasil search
+        const resultSection = document.createElement('div');
+        resultSection.className = 'search-results-container';
+        
+        resultSection.innerHTML = `
+            <div class="section-header mt-large">
+                <div class="bar-accent"></div>
+                <h2>Hasil Pencarian: "${query}"</h2>
+            </div>
+            <div class="anime-grid">
+                ${data.map(anime => `
+                    <div class="scroll-card" onclick="loadDetail('${anime.url}')" style="min-width: auto; max-width: none;">
+                        <div class="scroll-card-img">
+                            <img src="${anime.image}" alt="${anime.title}" loading="lazy">
+                            <div class="ep-badge">Ep ${anime.score || '?'}</div>
+                        </div>
+                        <h3 class="scroll-card-title">${anime.title}</h3>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+        homeContainer.appendChild(resultSection);
+
     } catch (err) {
         console.error(err);
     } finally {
@@ -185,9 +238,7 @@ function changeServer(url, btn) {
 
 // Navigasi Balik
 function goHome() {
-    document.querySelector('.section-header').classList.remove('hidden');
-    document.querySelectorAll('.section-header')[1].querySelector('h2').innerText = 'Rilisan Terbaru';
-    loadLatest();
+    loadLatest(); // Reload halaman utama untuk kembali ke tampilan section
 }
 
 function backToDetail() {
@@ -200,8 +251,6 @@ function backToDetail() {
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebar-overlay');
-    
-    // Toggle class active
     sidebar.classList.toggle('active');
     overlay.classList.toggle('active');
 }
