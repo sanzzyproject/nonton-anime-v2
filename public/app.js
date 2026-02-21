@@ -20,7 +20,7 @@ const show = (id) => {
 const hide = (id) => {
     const el = document.getElementById(id);
     if(el) el.classList.add('hidden');
-    // Jika menyembunyikan home, stop slider
+    // Stop slider jika halaman home disembunyikan
     if (id === 'home-view' && sliderInterval) {
         clearInterval(sliderInterval);
     }
@@ -28,35 +28,35 @@ const hide = (id) => {
 
 const loader = (state) => state ? show('loading') : hide('loading');
 
-// --- FUNGSI NAVIGASI BAWAH (BARU) ---
+// --- FUNGSI TAB BAWAH (BOTTOM NAV) BARU ---
 function switchTab(tabName) {
-    // Sembunyikan semua konten utama
+    // Sembunyikan semua halaman utama
     hide('home-view');
-    hide('search-view');
+    hide('anime-view');
+    hide('recent-view');
+    hide('schedule-view');
     hide('profile-view');
     hide('detail-view');
     hide('watch-view');
 
-    // Hapus class 'active' dari semua menu bawah
-    document.getElementById('tab-home').classList.remove('active');
-    document.getElementById('tab-search').classList.remove('active');
-    document.getElementById('tab-profile').classList.remove('active');
-
-    // Tampilkan Menu Navigasi Bawah
+    // Kembalikan status Bottom Nav agar muncul
     show('bottomNav');
 
-    // Tampilkan Tab yang dipilih
+    // Hapus efek aktif di semua tombol
+    document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
+
+    // Aktifkan tab yang diklik
     if (tabName === 'home') {
         show('home-view');
         document.getElementById('tab-home').classList.add('active');
-        // Jika Home masih kosong, load data
+        
+        // Auto Load Jika masih kosong
         if (document.getElementById('home-view').innerHTML === '') {
             loadLatest();
         } else {
-            // Re-init slider jika sudah pernah load
+            // Jalankan ulang animasi slider jika data sudah ada
             const wrapper = document.getElementById('heroWrapper');
             if (wrapper && !sliderInterval) {
-                // restart interval simple
                 const totalSlides = document.querySelectorAll('.hero-slide').length;
                 let currentSlide = 0;
                 sliderInterval = setInterval(() => {
@@ -73,11 +73,15 @@ function switchTab(tabName) {
                 }, 5000);
             }
         }
-    } else if (tabName === 'search') {
-        show('search-view');
-        document.getElementById('tab-search').classList.add('active');
-        // Auto focus ke input pencarian
-        document.getElementById('searchInput').focus();
+    } else if (tabName === 'anime') {
+        show('anime-view');
+        document.getElementById('tab-anime').classList.add('active');
+    } else if (tabName === 'recent') {
+        show('recent-view');
+        document.getElementById('tab-recent').classList.add('active');
+    } else if (tabName === 'schedule') {
+        show('schedule-view');
+        document.getElementById('tab-schedule').classList.add('active');
     } else if (tabName === 'profile') {
         show('profile-view');
         document.getElementById('tab-profile').classList.add('active');
@@ -263,32 +267,40 @@ function renderSection(title, data, container) {
     container.appendChild(sectionDiv);
 }
 
-// --- FUNGSI PENCARIAN (UPDATED KE SEARCH VIEW) ---
+// --- FUNGSI SEARCH YANG SUDAH DIUPDATE ---
 async function handleSearch(manualQuery = null) {
     const searchInput = document.getElementById('searchInput');
     const query = manualQuery || searchInput.value;
     
-    // Jika tombol 'Lainnya' ditekan, ganti ke tab Search otomatis
     if (manualQuery) {
-        switchTab('search');
         searchInput.value = manualQuery;
     }
     
-    if (!query) return;
+    // Jika input kosong, muat ulang Beranda (Home)
+    if (!query) {
+        switchTab('home');
+        return;
+    }
+
+    // Pastikan masuk ke Tab Home saat hasil pencarian ditampilkan
+    switchTab('home');
 
     loader(true);
     try {
         const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
         const data = await res.json();
         
-        // Render ke div khusus pencarian
-        const searchContainer = document.getElementById('search-results-container');
-        searchContainer.innerHTML = ''; 
+        const homeContainer = document.getElementById('home-view');
+        homeContainer.innerHTML = ''; 
 
         const resultSection = document.createElement('div');
         resultSection.className = 'search-results-container';
         
         resultSection.innerHTML = `
+            <div class="section-header mt-large">
+                <div class="bar-accent"></div>
+                <h2>Hasil Pencarian: "${query}"</h2>
+            </div>
             <div class="anime-grid">
                 ${data.map(anime => `
                     <div class="scroll-card" onclick="loadDetail('${anime.url}')" style="min-width: auto; max-width: none;">
@@ -302,7 +314,7 @@ async function handleSearch(manualQuery = null) {
             </div>
         `;
         
-        searchContainer.appendChild(resultSection);
+        homeContainer.appendChild(resultSection);
 
     } catch (err) {
         console.error(err);
@@ -317,12 +329,14 @@ async function loadDetail(url) {
         const res = await fetch(`${API_BASE}/detail?url=${encodeURIComponent(url)}`);
         const data = await res.json();
         
-        // Sembunyikan Navigasi Bawah saat masuk ke halaman detail
-        hide('bottomNav');
+        // Sembunyikan semua & hilangkan Bottom Nav saat masuk Detail
         hide('home-view');
-        hide('search-view');
+        hide('anime-view');
+        hide('recent-view');
+        hide('schedule-view');
         hide('profile-view');
         hide('watch-view');
+        hide('bottomNav'); 
         show('detail-view');
 
         const info = data.info || {};
@@ -360,7 +374,7 @@ async function loadDetail(url) {
         const playIcon = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
 
         document.getElementById('anime-info').innerHTML = `
-            <div class="detail-breadcrumb">Detail / ${data.title}</div>
+            <div class="detail-breadcrumb">Beranda / ${data.title}</div>
             <h1 class="detail-title">${data.title}</h1>
             <div class="detail-subtitle">${info.japanese || data.title}</div>
 
@@ -385,7 +399,7 @@ async function loadDetail(url) {
 
                     <div class="detail-season">${seasonInfo.toUpperCase()}</div>
 
-                    <p class="detail-synopsis">${data.description || 'Tidak ada deskripsi tersedia.'}</p>
+                    <p class="detail-synopsis">${data.description || 'Tidak ada deskripsi tersedia untuk anime ini.'}</p>
 
                     <div class="detail-actions">
                         <button class="btn-action" onclick="${oldestEpUrl ? `loadVideo('${oldestEpUrl}')` : `alert('Belum ada episode')`}">
@@ -453,7 +467,7 @@ async function loadVideo(url) {
 
         hide('detail-view');
         show('watch-view');
-        hide('bottomNav'); // Pastikan Nav Bawah tersembunyi saat nonton
+        hide('bottomNav'); // Pastikan Nav Bawah tetap hilang saat play video
 
         document.getElementById('video-title').innerText = data.title;
         
@@ -487,7 +501,7 @@ function changeServer(url, btn) {
 }
 
 function goHome() { 
-    // Saat tombol kembali ditekan, kita panggil switchTab home agar bottom nav muncul lagi
+    // Kembali dari Halaman Detail ke Tab Utama
     switchTab('home'); 
 }
 
@@ -497,9 +511,9 @@ function backToDetail() {
     document.getElementById('video-player').src = ''; 
 }
 
-// Inisialisasi Pertama
+// Inisiasi Pertama Saat Buka Web
 document.addEventListener('DOMContentLoaded', () => {
-    switchTab('home'); // Otomatis buka Home & Load Data
+    switchTab('home'); // Buka halaman Home dan otomatis load data
 });
 
 document.getElementById('searchInput').addEventListener('keypress', (e) => {
