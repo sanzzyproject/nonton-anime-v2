@@ -1,17 +1,24 @@
+// --- REGISTRASI PWA SERVICE WORKER ---
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
+    });
+}
+
 const API_BASE = '/api'; 
 
-// --- INDEXEDDB UNTUK HISTORY ---
+// --- INDEXEDDB UNTUK HISTORY & FAVORITE ---
 const DB_NAME = 'NimeStreamDB';
-const STORE_NAME = 'history';
+const STORE_HISTORY = 'history';
+const STORE_FAV = 'favorites';
 
 function initDB() {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, 1);
+        const req = indexedDB.open(DB_NAME, 2); // Upgrade versi database
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME, { keyPath: 'url' });
-            }
+            if (!db.objectStoreNames.contains(STORE_HISTORY)) db.createObjectStore(STORE_HISTORY, { keyPath: 'url' });
+            if (!db.objectStoreNames.contains(STORE_FAV)) db.createObjectStore(STORE_FAV, { keyPath: 'url' });
         };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
@@ -21,24 +28,56 @@ function initDB() {
 async function saveHistory(animeObj) {
     try {
         const db = await initDB();
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
+        const tx = db.transaction(STORE_HISTORY, 'readwrite');
         animeObj.timestamp = Date.now();
-        store.put(animeObj);
-    } catch(e) { console.error("History save error", e); }
+        tx.objectStore(STORE_HISTORY).put(animeObj);
+    } catch(e) {}
 }
 
 async function getHistory() {
     try {
         const db = await initDB();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readonly');
-            const store = tx.objectStore(STORE_NAME);
-            const req = store.getAll();
-            req.onsuccess = () => {
-                resolve(req.result.sort((a,b) => b.timestamp - a.timestamp));
-            };
-            req.onerror = () => reject(req.error);
+        return new Promise((resolve) => {
+            const req = db.transaction(STORE_HISTORY, 'readonly').objectStore(STORE_HISTORY).getAll();
+            req.onsuccess = () => resolve(req.result.sort((a,b) => b.timestamp - a.timestamp));
+        });
+    } catch(e) { return []; }
+}
+
+// LOGIKA FAVORITE BARU
+async function toggleFavorite(url, title, image, score) {
+    try {
+        const db = await initDB();
+        const isFav = await checkFavorite(url);
+        const tx = db.transaction(STORE_FAV, 'readwrite');
+        const store = tx.objectStore(STORE_FAV);
+        
+        if (isFav) {
+            store.delete(url);
+            document.getElementById('favBtn').classList.remove('active');
+        } else {
+            store.put({url, title, image, score, timestamp: Date.now()});
+            document.getElementById('favBtn').classList.add('active');
+        }
+    } catch(e) {}
+}
+
+async function checkFavorite(url) {
+    try {
+        const db = await initDB();
+        return new Promise((resolve) => {
+            const req = db.transaction(STORE_FAV, 'readonly').objectStore(STORE_FAV).get(url);
+            req.onsuccess = () => resolve(!!req.result);
+        });
+    } catch(e) { return false; }
+}
+
+async function getFavorites() {
+    try {
+        const db = await initDB();
+        return new Promise((resolve) => {
+            const req = db.transaction(STORE_FAV, 'readonly').objectStore(STORE_FAV).getAll();
+            req.onsuccess = () => resolve(req.result.sort((a,b) => b.timestamp - a.timestamp));
         });
     } catch(e) { return []; }
 }
@@ -54,7 +93,6 @@ const HOME_SECTIONS = [
     { title: "Comedy & Chill 😂", queries: ["comedy", "slice of life", "bocchi", "spy"] }
 ];
 
-// MAPPING KATA KUNCI AGAR HASIL KATEGORI MELIMPAH
 const GENRE_KEYWORDS = {
     "Action": ["action", "shounen", "fight", "jujutsu", "kimetsu"],
     "Adventure": ["adventure", "journey", "world", "isekai"],
@@ -73,12 +111,9 @@ const GENRE_KEYWORDS = {
 const KATEGORI_LIST = Object.keys(GENRE_KEYWORDS);
 let sliderInterval;
 
-// --- TEMA GELAP / TERANG (LIGHT/DARK MODE) ---
 function toggleTheme() {
     const body = document.documentElement;
     const currentTheme = body.getAttribute('data-theme');
-    
-    // Icon SVG
     const moonIcon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
     const sunIcon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
 
@@ -95,45 +130,31 @@ function toggleTheme() {
     }
 }
 
-// Inisialisasi Tema
 if(localStorage.getItem('theme') === 'light') {
     document.documentElement.setAttribute('data-theme', 'light');
     document.getElementById('themeBtn').innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
 }
 
-const show = (id) => {
-    const el = document.getElementById(id);
-    if(el) el.classList.remove('hidden');
+const show = (id) => { const el = document.getElementById(id); if(el) el.classList.remove('hidden'); };
+const hide = (id) => { 
+    const el = document.getElementById(id); 
+    if(el) el.classList.add('hidden'); 
+    if (id === 'home-view' && sliderInterval) clearInterval(sliderInterval); 
 };
-
-const hide = (id) => {
-    const el = document.getElementById(id);
-    if(el) el.classList.add('hidden');
-    if (id === 'home-view' && sliderInterval) {
-        clearInterval(sliderInterval);
-    }
-};
-
 const loader = (state) => state ? show('loading') : hide('loading');
 
 function switchTab(tabName) {
-    hide('home-view');
-    hide('anime-view');
-    hide('recent-view');
-    hide('schedule-view');
-    hide('profile-view');
-    hide('detail-view');
-    hide('watch-view');
-
+    hide('home-view'); hide('anime-view'); hide('recent-view');
+    hide('favorite-view'); hide('developer-view'); hide('detail-view'); hide('watch-view');
     show('bottomNav');
+    
     document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
 
     if (tabName === 'home') {
         show('home-view');
         document.getElementById('tab-home').classList.add('active');
-        if (document.getElementById('home-view').innerHTML === '') {
-            loadLatest();
-        } else {
+        if (document.getElementById('home-view').innerHTML === '') loadLatest();
+        else {
             const wrapper = document.getElementById('heroWrapper');
             if (wrapper && !sliderInterval) {
                 const totalSlides = document.querySelectorAll('.hero-slide').length;
@@ -143,41 +164,26 @@ function switchTab(tabName) {
                     wrapper.style.transition = 'transform 0.5s ease-in-out';
                     wrapper.style.transform = `translateX(-${currentSlide * 100}%)`;
                     if (currentSlide >= totalSlides - 1) {
-                        setTimeout(() => {
-                            wrapper.style.transition = 'none';
-                            currentSlide = 0;
-                            wrapper.style.transform = `translateX(0)`;
-                        }, 500); 
+                        setTimeout(() => { wrapper.style.transition = 'none'; currentSlide = 0; wrapper.style.transform = `translateX(0)`; }, 500); 
                     }
                 }, 5000);
             }
         }
     } else if (tabName === 'anime') {
-        show('anime-view');
-        document.getElementById('tab-anime').classList.add('active');
-        renderCategoryPage(); 
+        show('anime-view'); document.getElementById('tab-anime').classList.add('active'); renderCategoryPage(); 
     } else if (tabName === 'recent') {
-        show('recent-view');
-        document.getElementById('tab-recent').classList.add('active');
-        loadRecentHistory(); 
-    } else if (tabName === 'schedule') {
-        show('schedule-view');
-        document.getElementById('tab-schedule').classList.add('active');
-    } else if (tabName === 'profile') {
-        show('profile-view');
-        document.getElementById('tab-profile').classList.add('active');
+        show('recent-view'); document.getElementById('tab-recent').classList.add('active'); loadRecentHistory(); 
+    } else if (tabName === 'favorite') {
+        show('favorite-view'); document.getElementById('tab-favorite').classList.add('active'); loadFavorites(); 
+    } else if (tabName === 'developer') {
+        show('developer-view'); document.getElementById('tab-developer').classList.add('active');
     }
 }
 
-// --- FUNGSI KATEGORI YG DIUPDATE MENGGUNAKAN MULTI-KEYWORD ---
 function renderCategoryPage() {
     const grid = document.getElementById('genre-grid');
     if (grid.innerHTML !== '') return; 
-    
-    grid.innerHTML = KATEGORI_LIST.map(genre => `
-        <button class="genre-btn" onclick="loadCategory('${genre}', this)">${genre}</button>
-    `).join('');
-    
+    grid.innerHTML = KATEGORI_LIST.map(genre => `<button class="genre-btn" onclick="loadCategory('${genre}', this)">${genre}</button>`).join('');
     loadCategory(KATEGORI_LIST[0], grid.firstElementChild);
 }
 
@@ -189,18 +195,9 @@ async function loadCategory(genre, btnElement) {
     try {
         let combinedData = [];
         const queriesToFetch = GENRE_KEYWORDS[genre] || [genre];
-
-        const promises = queriesToFetch.map(q => 
-            fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`)
-                .then(res => res.json())
-                .catch(() => [])
-        );
-
+        const promises = queriesToFetch.map(q => fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`).then(res => res.json()).catch(() => []));
         const results = await Promise.all(promises);
-        results.forEach(list => {
-            if(Array.isArray(list)) combinedData = [...combinedData, ...list];
-        });
-        
+        results.forEach(list => { if(Array.isArray(list)) combinedData = [...combinedData, ...list]; });
         combinedData = removeDuplicates(combinedData, 'url');
         
         const container = document.getElementById('category-results-container');
@@ -217,51 +214,33 @@ async function loadCategory(genre, btnElement) {
             <div class="anime-grid">
                 ${combinedData.map(anime => `
                     <div class="scroll-card" onclick="loadDetail('${anime.url}')" style="min-width: auto; max-width: none;">
-                        <div class="scroll-card-img">
-                            <img src="${anime.image}" alt="${anime.title}" loading="lazy">
-                            <div class="ep-badge">Ep ${anime.score || '?'}</div>
-                        </div>
+                        <div class="scroll-card-img"><img src="${anime.image}" alt="${anime.title}" loading="lazy"><div class="ep-badge">Ep ${anime.score || '?'}</div></div>
                         <h3 class="scroll-card-title">${anime.title}</h3>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    } catch (err) {
-        console.error(err);
-    } finally {
-        loader(false);
-    }
+                    </div>`).join('')}
+            </div>`;
+    } catch (err) { console.error(err); } finally { loader(false); }
 }
 
 async function loadRecentHistory() {
     const container = document.getElementById('recent-results-container');
     container.innerHTML = '<div class="spinner"></div>';
-    
     const historyData = await getHistory();
-    
     if (!historyData || historyData.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" style="margin-bottom:15px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                <h2>Belum ada riwayat</h2>
-                <p>Anime yang baru saja kamu lihat akan muncul di sini.</p>
-            </div>`;
+        container.innerHTML = `<div class="empty-state"><svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" style="margin-bottom:15px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><h2>Belum ada riwayat</h2><p>Anime yang baru saja kamu lihat akan muncul di sini.</p></div>`;
         return;
     }
+    container.innerHTML = `<div class="anime-grid">${historyData.map(anime => `<div class="scroll-card" onclick="loadDetail('${anime.url}')" style="min-width: auto; max-width: none;"><div class="scroll-card-img"><img src="${anime.image}" alt="${anime.title}" loading="lazy"><div class="ep-badge">⭐ ${anime.score || '?'}</div></div><h3 class="scroll-card-title">${anime.title}</h3></div>`).join('')}</div>`;
+}
 
-    container.innerHTML = `
-        <div class="anime-grid">
-            ${historyData.map(anime => `
-                <div class="scroll-card" onclick="loadDetail('${anime.url}')" style="min-width: auto; max-width: none;">
-                    <div class="scroll-card-img">
-                        <img src="${anime.image}" alt="${anime.title}" loading="lazy">
-                        <div class="ep-badge">⭐ ${anime.score || '?'}</div>
-                    </div>
-                    <h3 class="scroll-card-title">${anime.title}</h3>
-                </div>
-            `).join('')}
-        </div>
-    `;
+async function loadFavorites() {
+    const container = document.getElementById('favorite-results-container');
+    container.innerHTML = '<div class="spinner"></div>';
+    const favData = await getFavorites();
+    if (!favData || favData.length === 0) {
+        container.innerHTML = `<div class="empty-state"><svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" style="margin-bottom:15px;"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg><h2>Belum ada Favorit</h2><p>Simpan anime kesukaanmu dengan menekan ikon hati.</p></div>`;
+        return;
+    }
+    container.innerHTML = `<div class="anime-grid">${favData.map(anime => `<div class="scroll-card" onclick="loadDetail('${anime.url}')" style="min-width: auto; max-width: none;"><div class="scroll-card-img"><img src="${anime.image}" alt="${anime.title}" loading="lazy"><div class="ep-badge">⭐ ${anime.score || '?'}</div></div><h3 class="scroll-card-title">${anime.title}</h3></div>`).join('')}</div>`;
 }
 
 async function loadLatest() {
@@ -272,11 +251,7 @@ async function loadLatest() {
     try {
         const sliderSection = HOME_SECTIONS[0]; 
         let sliderData = [];
-
-        try {
-            const res = await fetch(`${API_BASE}/latest`);
-            sliderData = await res.json();
-        } catch (e) { console.error("Gagal load slider", e); }
+        try { const res = await fetch(`${API_BASE}/latest`); sliderData = await res.json(); } catch (e) {}
 
         if (sliderData && sliderData.length > 0) {
             const top10 = sliderData.slice(0, 10);
@@ -295,29 +270,19 @@ async function loadLatest() {
                         const year = `${musim} ${rilis}`.trim() || 'Unknown';
                         
                         const metaElements = document.querySelectorAll(`.hero-meta[data-url="${item.url}"]`);
-                        metaElements.forEach(el => {
-                            el.innerHTML = `<span>⭐ ${score}</span> • <span>${type}</span> • <span>${year}</span>`;
-                        });
+                        metaElements.forEach(el => { el.innerHTML = `<span>⭐ ${score}</span> • <span>${type}</span> • <span>${year}</span>`; });
                     }
                 } catch (e) {}
             });
-        } else {
-            loader(false);
-        }
+        } else { loader(false); }
 
         for (let i = 1; i < HOME_SECTIONS.length; i++) {
             const section = HOME_SECTIONS[i];
             (async () => {
                 let combinedData = [];
-                const promises = section.queries.map(q => 
-                    fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`)
-                        .then(res => res.json())
-                        .catch(() => [])
-                );
+                const promises = section.queries.map(q => fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`).then(res => res.json()).catch(() => []));
                 const results = await Promise.all(promises);
-                results.forEach(list => {
-                    if(Array.isArray(list)) combinedData = [...combinedData, ...list];
-                });
+                results.forEach(list => { if(Array.isArray(list)) combinedData = [...combinedData, ...list]; });
                 combinedData = removeDuplicates(combinedData, 'url');
 
                 if (combinedData.length > 0) {
@@ -326,15 +291,10 @@ async function loadLatest() {
                 }
             })();
         }
-    } catch (err) {
-        console.error(err);
-        loader(false);
-    }
+    } catch (err) { loader(false); }
 }
 
-function removeDuplicates(array, key) {
-    return [ ...new Map(array.map(item => [item[key], item])).values() ];
-}
+function removeDuplicates(array, key) { return [ ...new Map(array.map(item => [item[key], item])).values() ]; }
 
 function renderHeroSlider(title, data, container) {
     const sectionContainer = document.createElement('div');
@@ -346,10 +306,7 @@ function renderHeroSlider(title, data, container) {
     const loopData = [...data, data[0]];
 
     const slidesHtml = loopData.map((anime, index) => {
-        const score = anime.score || 'N/A';
-        const type = anime.type || 'Anime';
-        const year = anime.year || 'Unknown';
-        
+        const score = anime.score || 'N/A'; const type = anime.type || 'Anime'; const year = anime.year || 'Unknown';
         let epNumMatch = anime.episode ? anime.episode.match(/\d+(\.\d+)?/) : null;
         let eps = epNumMatch ? `Ep ${epNumMatch[0]}` : (anime.episode ? `Ep ${anime.episode}` : '');
 
@@ -360,26 +317,17 @@ function renderHeroSlider(title, data, container) {
                 <div class="hero-content">
                     ${eps ? `<div class="hero-badge">${eps}</div>` : ''}
                     <h2 class="hero-title">${anime.title}</h2>
-                    <div class="hero-meta" data-url="${anime.url}">
-                        <span>⭐ ${score}</span> • <span>${type}</span> • <span>${year}</span>
-                    </div>
-                    <button onclick="loadDetail('${anime.url}')" class="hero-btn">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                        Nonton Sekarang
-                    </button>
+                    <div class="hero-meta" data-url="${anime.url}"><span>⭐ ${score}</span> • <span>${type}</span> • <span>${year}</span></div>
+                    <button onclick="loadDetail('${anime.url}')" class="hero-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Nonton Sekarang</button>
                 </div>
-            </div>
-        `;
+            </div>`;
     }).join('');
 
     sliderDiv.innerHTML = `<div class="hero-wrapper" id="heroWrapper">${slidesHtml}</div>`;
     sectionContainer.appendChild(sliderDiv);
     
-    if (container.firstChild) {
-        container.insertBefore(sectionContainer, container.firstChild);
-    } else {
-        container.appendChild(sectionContainer);
-    }
+    if (container.firstChild) container.insertBefore(sectionContainer, container.firstChild);
+    else container.appendChild(sectionContainer);
 
     const wrapper = document.getElementById('heroWrapper');
     let currentSlide = 0;
@@ -389,18 +337,11 @@ function renderHeroSlider(title, data, container) {
 
     sliderInterval = setInterval(() => {
         if (!wrapper || document.getElementById('home-view').classList.contains('hidden')) return;
-        
         currentSlide++;
         wrapper.style.transition = 'transform 0.5s ease-in-out';
         wrapper.style.transform = `translateX(-${currentSlide * 100}%)`;
-
         if (currentSlide === totalSlides - 1) {
-            setTimeout(() => {
-                if (!wrapper) return;
-                wrapper.style.transition = 'none';
-                currentSlide = 0;
-                wrapper.style.transform = `translateX(0)`;
-            }, 500); 
+            setTimeout(() => { wrapper.style.transition = 'none'; currentSlide = 0; wrapper.style.transform = `translateX(0)`; }, 500); 
         }
     }, 5000); 
 }
@@ -408,55 +349,35 @@ function renderHeroSlider(title, data, container) {
 function renderSection(title, data, container) {
     const sectionDiv = document.createElement('div');
     sectionDiv.className = 'category-section';
-
     const searchKeyword = title.split(' ')[0];
 
     const headerHtml = `
         <div class="header-flex">
-            <div class="section-header">
-                <div class="bar-accent"></div>
-                <h2>${title}</h2>
-            </div>
+            <div class="section-header"><div class="bar-accent"></div><h2>${title}</h2></div>
             <a href="#" class="more-link" onclick="handleSearch('${searchKeyword}')">Lainnya</a>
-        </div>
-    `;
+        </div>`;
 
     const cardsHtml = data.map(anime => {
         const eps = anime.episode || anime.score || '?'; 
         const displayTitle = anime.title.length > 35 ? anime.title.substring(0, 35) + '...' : anime.title;
-        
         return `
         <div class="scroll-card" onclick="loadDetail('${anime.url}')">
-            <div class="scroll-card-img">
-                <img src="${anime.image}" alt="${anime.title}" loading="lazy">
-                <div class="ep-badge">Ep ${eps}</div>
-            </div>
+            <div class="scroll-card-img"><img src="${anime.image}" alt="${anime.title}" loading="lazy"><div class="ep-badge">Ep ${eps}</div></div>
             <div class="scroll-card-title">${displayTitle}</div>
-        </div>
-        `;
+        </div>`;
     }).join('');
 
     sectionDiv.innerHTML = headerHtml + `<div class="horizontal-scroll">${cardsHtml}</div>`;
     container.appendChild(sectionDiv);
 }
 
-// --- FUNGSI SEARCH ---
 async function handleSearch(manualQuery = null) {
     const searchInput = document.getElementById('searchInput');
     const query = manualQuery || searchInput.value;
+    if (manualQuery) searchInput.value = manualQuery;
+    if (!query) { switchTab('home'); return; }
     
-    if (manualQuery) {
-        searchInput.value = manualQuery;
-    }
-    
-    if (!query) {
-        switchTab('home');
-        return;
-    }
-
-    // Ubah hasil pencarian dirender di home view
     switchTab('home');
-
     loader(true);
     try {
         const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
@@ -467,32 +388,17 @@ async function handleSearch(manualQuery = null) {
 
         const resultSection = document.createElement('div');
         resultSection.className = 'search-results-container';
-        
         resultSection.innerHTML = `
-            <div class="section-header mt-large">
-                <div class="bar-accent"></div>
-                <h2>Hasil Pencarian: "${query}"</h2>
-            </div>
+            <div class="section-header mt-large"><div class="bar-accent"></div><h2>Hasil Pencarian: "${query}"</h2></div>
             <div class="anime-grid">
                 ${data.map(anime => `
                     <div class="scroll-card" onclick="loadDetail('${anime.url}')" style="min-width: auto; max-width: none;">
-                        <div class="scroll-card-img">
-                            <img src="${anime.image}" alt="${anime.title}" loading="lazy">
-                            <div class="ep-badge">Ep ${anime.score || '?'}</div>
-                        </div>
+                        <div class="scroll-card-img"><img src="${anime.image}" alt="${anime.title}" loading="lazy"><div class="ep-badge">Ep ${anime.score || '?'}</div></div>
                         <h3 class="scroll-card-title">${anime.title}</h3>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-        
+                    </div>`).join('')}
+            </div>`;
         homeContainer.appendChild(resultSection);
-
-    } catch (err) {
-        console.error(err);
-    } finally {
-        loader(false);
-    }
+    } catch (err) {} finally { loader(false); }
 }
 
 async function loadDetail(url) {
@@ -501,12 +407,8 @@ async function loadDetail(url) {
         const res = await fetch(`${API_BASE}/detail?url=${encodeURIComponent(url)}`);
         const data = await res.json();
         
-        hide('home-view');
-        hide('anime-view');
-        hide('recent-view');
-        hide('schedule-view');
-        hide('profile-view');
-        hide('watch-view');
+        hide('home-view'); hide('anime-view'); hide('recent-view');
+        hide('favorite-view'); hide('developer-view'); hide('watch-view');
         hide('bottomNav'); 
         show('detail-view');
 
@@ -520,7 +422,6 @@ async function loadDetail(url) {
         const musim = info.musim || info.season || '';
         const rilis = info.dirilis || info.released || '';
         const seasonInfo = `${musim} ${rilis}`.trim() || 'Unknown Date';
-
         const genreText = info.genre || info.genres || '';
         const genres = genreText ? genreText.split(',').map(g => g.trim()) : ['Anime'];
 
@@ -534,107 +435,70 @@ async function loadDetail(url) {
         if (isEpsExist) {
             let firstEpTitle = data.episodes[0].title;
             let match = firstEpTitle.match(/(?:Episode|Eps|Ep)\s*(\d+(\.\d+)?)/i);
-            if (match) {
-                newestEpNum = match[1];
-            } else {
-                let nums = firstEpTitle.match(/\d+/g);
-                newestEpNum = nums ? nums[nums.length - 1] : totalEpCount;
-            }
+            if (match) newestEpNum = match[1];
+            else { let nums = firstEpTitle.match(/\d+/g); newestEpNum = nums ? nums[nums.length - 1] : totalEpCount; }
         }
 
-        saveHistory({
-            url: url,
-            title: data.title,
-            image: data.image,
-            score: score
-        });
+        saveHistory({ url: url, title: data.title, image: data.image, score: score });
+
+        // LOGIKA ICON FAVORIT BERDASARKAN STATUS INDEXEDDB
+        const isFav = await checkFavorite(url);
+        const favClass = isFav ? 'active' : '';
 
         const playIcon = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+        const heartSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
 
         document.getElementById('anime-info').innerHTML = `
             <div class="detail-breadcrumb">Beranda / ${data.title}</div>
-            <h1 class="detail-title">${data.title}</h1>
+            
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <h1 class="detail-title">${data.title}</h1>
+                <button id="favBtn" class="btn-fav-detail ${favClass}" onclick="toggleFavorite('${url}', '${data.title.replace(/'/g, "\\'")}', '${data.image}', '${score}')">
+                    ${heartSvg}
+                </button>
+            </div>
+            
             <div class="detail-subtitle">${info.japanese || data.title}</div>
 
             <div class="detail-main-layout">
-                <div class="detail-poster">
-                    <img src="${data.image}" alt="${data.title}">
-                </div>
-                
+                <div class="detail-poster"><img src="${data.image}" alt="${data.title}"></div>
                 <div class="detail-info-col">
                     <div class="detail-badges">
                         <span class="badge status">${status.replace(' ', '_')}</span>
-                        <span class="badge score">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> 
-                            ${score}
-                        </span>
+                        <span class="badge score"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> ${score}</span>
                         <span class="badge type">${type}</span>
                     </div>
-
-                    <div class="detail-genres">
-                        ${genres.map(g => `<span class="genre-tag">${g}</span>`).join('')}
-                    </div>
-
+                    <div class="detail-genres">${genres.map(g => `<span class="genre-tag">${g}</span>`).join('')}</div>
                     <div class="detail-season">${seasonInfo.toUpperCase()}</div>
-
-                    <p class="detail-synopsis">${data.description || 'Tidak ada deskripsi tersedia untuk anime ini.'}</p>
+                    <p class="detail-synopsis">${data.description || 'Tidak ada deskripsi tersedia.'}</p>
 
                     <div class="detail-actions">
-                        <button class="btn-action" onclick="${oldestEpUrl ? `loadVideo('${oldestEpUrl}')` : `alert('Belum ada episode')`}">
-                            ${playIcon} Nonton
-                        </button>
-                        <button class="btn-action" onclick="${newestEpUrl ? `loadVideo('${newestEpUrl}')` : `alert('Belum ada episode')`}">
-                            ${playIcon} Terbaru (${newestEpNum})
-                        </button>
+                        <button class="btn-action" onclick="${oldestEpUrl ? `loadVideo('${oldestEpUrl}')` : `alert('Belum ada episode')`}">${playIcon} Nonton</button>
+                        <button class="btn-action" onclick="${newestEpUrl ? `loadVideo('${newestEpUrl}')` : `alert('Belum ada episode')`}">${playIcon} Terbaru (${newestEpNum})</button>
                     </div>
                 </div>
             </div>
 
             <div class="metadata-grid">
-                <div class="meta-item">
-                    <span class="meta-label">STUDIO</span>
-                    <span class="meta-pill">${studio.toUpperCase()}</span>
-                </div>
-                <div class="meta-item">
-                    <span class="meta-label">TOTAL EPS</span>
-                    <span class="meta-value">${totalEps}</span>
-                </div>
-                <div class="meta-item" style="grid-column: span 2;">
-                    <span class="meta-label">DURASI</span>
-                    <span class="meta-value">${duration}</span>
-                </div>
+                <div class="meta-item"><span class="meta-label">STUDIO</span><span class="meta-pill">${studio.toUpperCase()}</span></div>
+                <div class="meta-item"><span class="meta-label">TOTAL EPS</span><span class="meta-value">${totalEps}</span></div>
+                <div class="meta-item" style="grid-column: span 2;"><span class="meta-label">DURASI</span><span class="meta-value">${duration}</span></div>
             </div>
         `;
 
-        document.getElementById('episode-header-container').innerHTML = `
-            <div class="ep-header-wrapper">
-                <h2 class="ep-header-title">Daftar Episode</h2>
-                ${isEpsExist ? `<div class="ep-range-badge">1 - ${newestEpNum}</div>` : ''}
-            </div>
-        `;
+        document.getElementById('episode-header-container').innerHTML = `<div class="ep-header-wrapper"><h2 class="ep-header-title">Daftar Episode</h2>${isEpsExist ? `<div class="ep-range-badge">1 - ${newestEpNum}</div>` : ''}</div>`;
 
         const epGrid = document.getElementById('episode-grid');
         epGrid.innerHTML = data.episodes.map(ep => {
             let displayTitle = '';
             let epNumMatch = ep.title.match(/(?:Episode|Eps|Ep)\s*(\d+(\.\d+)?)/i);
-            
-            if (epNumMatch) {
-                displayTitle = epNumMatch[1];
-            } else {
-                let nums = ep.title.match(/\d+/g);
-                displayTitle = nums ? nums[nums.length - 1] : ep.title;
-            }
-            
+            if (epNumMatch) displayTitle = epNumMatch[1];
+            else { let nums = ep.title.match(/\d+/g); displayTitle = nums ? nums[nums.length - 1] : ep.title; }
             if (displayTitle.length > 12) displayTitle = displayTitle.substring(0, 10) + '...';
-
             return `<div class="ep-box" title="${ep.title}" onclick="loadVideo('${ep.url}')">${displayTitle}</div>`;
         }).join('');
 
-    } catch (err) {
-        console.error(err);
-    } finally {
-        loader(false);
-    }
+    } catch (err) { console.error(err); } finally { loader(false); }
 }
 
 async function loadVideo(url) {
@@ -642,34 +506,17 @@ async function loadVideo(url) {
     try {
         const res = await fetch(`${API_BASE}/watch?url=${encodeURIComponent(url)}`);
         const data = await res.json();
-
-        hide('detail-view');
-        show('watch-view');
-        hide('bottomNav'); 
+        hide('detail-view'); show('watch-view'); hide('bottomNav'); 
 
         document.getElementById('video-title').innerText = data.title;
-        
         const player = document.getElementById('video-player');
         const serverContainer = document.getElementById('server-options');
 
         if (data.streams.length > 0) {
             player.src = data.streams[0].url;
-            
-            serverContainer.innerHTML = data.streams.map((stream, index) => `
-                <button class="server-tag ${index === 0 ? 'active' : ''}" 
-                     onclick="changeServer('${stream.url}', this)">
-                     ${stream.server}
-                </button>
-            `).join('');
-        } else {
-            alert('Maaf, stream belum tersedia untuk episode ini.');
-        }
-
-    } catch (err) {
-        console.error(err);
-    } finally {
-        loader(false);
-    }
+            serverContainer.innerHTML = data.streams.map((stream, index) => `<button class="server-tag ${index === 0 ? 'active' : ''}" onclick="changeServer('${stream.url}', this)">${stream.server}</button>`).join('');
+        } else alert('Maaf, stream belum tersedia untuk episode ini.');
+    } catch (err) { } finally { loader(false); }
 }
 
 function changeServer(url, btn) {
@@ -678,20 +525,8 @@ function changeServer(url, btn) {
     btn.classList.add('active');
 }
 
-function goHome() { 
-    switchTab('home'); 
-}
+function goHome() { switchTab('home'); }
+function backToDetail() { hide('watch-view'); show('detail-view'); document.getElementById('video-player').src = ''; }
 
-function backToDetail() {
-    hide('watch-view');
-    show('detail-view');
-    document.getElementById('video-player').src = ''; 
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    switchTab('home'); 
-});
-
-document.getElementById('searchInput').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') handleSearch();
-});
+document.addEventListener('DOMContentLoaded', () => { switchTab('home'); });
+document.getElementById('searchInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSearch(); });
