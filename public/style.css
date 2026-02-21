@@ -58,28 +58,20 @@ body {
     transition: background 0.3s, border-color 0.3s;
 }
 
-/* --- UPDATE PROFILE STYLE (WARNA-WARNI) --- */
+/* --- FIX STYLE PROFILE: BORDER GRADIENT ALA GEMINI --- */
 .top-logo {
-    width: 44px; /* Sedikit diperbesar untuk ruang border */
+    width: 44px;
     height: 44px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    /* Style Border Warna-Warni (Kuning, Merah, Biru, Hijau) */
-    padding: 2px; /* Ketebalan border */
-    background: conic-gradient(
-        from 0deg,
-        #facc15, /* Kuning */
-        #ef4444, /* Merah */
-        #3b82f6, /* Biru */
-        #22c55e, /* Hijau */
-        #facc15  /* Kembali ke Kuning agar loop halus */
-    );
-    /* Agar gambar tetap bulat di dalam border */
-    -webkit-mask-image: linear-gradient(#fff, #fff);
-            mask-image: linear-gradient(#fff, #fff);
+    /* Memberi jarak/padding yang akan diisi oleh background gradient */
+    padding: 2.5px; 
+    /* Gradient warna Biru, Merah, Kuning, Hijau persis Gemini */
+    background: conic-gradient(from 90deg, #4285F4, #EA4335, #FBBC05, #34A853, #4285F4);
+    box-shadow: none;
 }
-/* ----------------------------------------- */
+/* ----------------------------------------------------- */
 
 .top-search-bar {
     flex: 1;
