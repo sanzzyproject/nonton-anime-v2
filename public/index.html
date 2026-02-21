@@ -10,7 +10,13 @@
 <body>
 
     <nav class="navbar">
-        <div class="logo">Nime<span class="logo-accent">Stream</span></div>
+        <img src="https://placehold.co/100x100/1a1a1a/8b5cf6?text=Logo" alt="Logo Web" class="top-logo">
+        
+        <div class="top-search-bar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="searchInput" placeholder="Search...">
+            <button onclick="handleSearch()" class="search-text-btn">Search</button>
+        </div>
     </nav>
 
     <main id="app">
@@ -21,22 +27,30 @@
         
         <div id="home-view"></div>
 
-        <div id="search-view" class="hidden">
-            <div class="search-page-header">
-                <h1 class="page-title">Pencarian Anime</h1>
-                <div class="search-input-wrapper">
-                    <input type="text" id="searchInput" placeholder="Ketik judul anime...">
-                    <button onclick="handleSearch()" class="search-btn-action">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                    </button>
-                </div>
+        <div id="anime-view" class="hidden">
+            <div class="empty-state">
+                <h2>Kategori Anime</h2>
+                <p>Fitur penjelajahan kategori akan segera hadir.</p>
             </div>
-            <div id="search-results-container"></div>
+        </div>
+
+        <div id="recent-view" class="hidden">
+            <div class="empty-state">
+                <h2>Riwayat Tontonan</h2>
+                <p>Belum ada riwayat anime yang kamu tonton.</p>
+            </div>
+        </div>
+
+        <div id="schedule-view" class="hidden">
+            <div class="empty-state">
+                <h2>Jadwal Rilis</h2>
+                <p>Fitur jadwal rilis episode terbaru akan segera hadir.</p>
+            </div>
         </div>
 
         <div id="profile-view" class="hidden">
             <div class="profile-container">
-                <h1 class="page-title">Profil & Info</h1>
+                <h1 class="page-title">Account Info</h1>
                 
                 <div class="profile-card">
                     <div class="profile-icon">
@@ -54,7 +68,7 @@
                     </div>
                     <div>
                         <h3>Dokumentasi Platform</h3>
-                        <p>NimeStream 2026 adalah layanan streaming anime berbasis web modern. Platform ini menyediakan akses cepat tanpa buffer ke ribuan judul, dirancang khusus dengan UI/UX ala aplikasi mobile tahun 2026.</p>
+                        <p>NimeStream 2026 adalah layanan streaming anime berbasis web modern. Dirancang khusus dengan UI/UX ala aplikasi mobile tahun 2026.</p>
                     </div>
                 </div>
 
@@ -106,16 +120,24 @@
 
     <nav class="bottom-nav" id="bottomNav">
         <button class="nav-item active" onclick="switchTab('home')" id="tab-home">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-            <span>Beranda</span>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            <span>Home</span>
         </button>
-        <button class="nav-item" onclick="switchTab('search')" id="tab-search">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <span>Cari</span>
+        <button class="nav-item" onclick="switchTab('anime')" id="tab-anime">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <span>Anime</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('recent')" id="tab-recent">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span>Recent</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('schedule')" id="tab-schedule">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <span>Schedule</span>
         </button>
         <button class="nav-item" onclick="switchTab('profile')" id="tab-profile">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-            <span>Profil</span>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <span>Account</span>
         </button>
     </nav>
 
