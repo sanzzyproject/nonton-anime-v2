@@ -1,121 +1,239 @@
 const API_BASE = '/api'; 
 
-// --- KONFIGURASI GENRE BERANDA (SMART KEYWORDS) ---
-// Kita menggunakan array 'queries' untuk menggabungkan banyak hasil pencarian
-// agar list menjadi penuh dan tidak hanya berisi 1 item.
 const HOME_SECTIONS = [
-    { 
-        title: "Sedang Hangat 🔥", 
-        mode: "latest" // Mode khusus untuk mengambil update terbaru
-    },
-    { 
-        title: "Isekai & Fantasy 🌀", 
-        queries: ["isekai", "reincarnation", "world", "maou"] 
-    },
-    { 
-        title: "Action Hits ⚔️", 
-        queries: ["kimetsu", "jujutsu", "piece", "bleach", "hunter", "shingeki"] 
-    },
-    { 
-        title: "Romance & Drama ❤️", 
-        queries: ["love", "kanojo", "romance", "heroine", "uso"] 
-    },
-    { 
-        title: "School Life 🏫", 
-        queries: ["school", "gakuen", "classroom", "high school"] 
-    },
-    { 
-        title: "Magic & Adventure ✨", 
-        queries: ["magic", "adventure", "dragon", "dungeon"] 
-    },
-    { 
-        title: "Comedy & Chill 😂", 
-        queries: ["comedy", "slice of life", "bocchi", "spy"] 
-    }
+    { title: "Sedang Hangat 🔥", mode: "latest" },
+    { title: "Isekai & Fantasy 🌀", queries: ["isekai", "reincarnation", "world", "maou"] },
+    { title: "Action Hits ⚔️", queries: ["kimetsu", "jujutsu", "piece", "bleach", "hunter", "shingeki"] },
+    { title: "Romance & Drama ❤️", queries: ["love", "kanojo", "romance", "heroine", "uso"] },
+    { title: "School Life 🏫", queries: ["school", "gakuen", "classroom", "high school"] },
+    { title: "Magic & Adventure ✨", queries: ["magic", "adventure", "dragon", "dungeon"] },
+    { title: "Comedy & Chill 😂", queries: ["comedy", "slice of life", "bocchi", "spy"] }
 ];
 
-// Utility
-const show = (id) => document.getElementById(id).classList.remove('hidden');
-const hide = (id) => document.getElementById(id).classList.add('hidden');
+let sliderInterval;
+
+const show = (id) => {
+    const el = document.getElementById(id);
+    if(el) el.classList.remove('hidden');
+};
+
+const hide = (id) => {
+    const el = document.getElementById(id);
+    if(el) el.classList.add('hidden');
+    // Jika menyembunyikan home, stop slider
+    if (id === 'home-view' && sliderInterval) {
+        clearInterval(sliderInterval);
+    }
+};
+
 const loader = (state) => state ? show('loading') : hide('loading');
 
-// --- LOAD DATA HOME (MULTI QUERY & MERGE) ---
-async function loadLatest() {
-    loader(true);
+// --- FUNGSI NAVIGASI BAWAH (BARU) ---
+function switchTab(tabName) {
+    // Sembunyikan semua konten utama
+    hide('home-view');
+    hide('search-view');
+    hide('profile-view');
     hide('detail-view');
     hide('watch-view');
-    show('home-view');
-    
+
+    // Hapus class 'active' dari semua menu bawah
+    document.getElementById('tab-home').classList.remove('active');
+    document.getElementById('tab-search').classList.remove('active');
+    document.getElementById('tab-profile').classList.remove('active');
+
+    // Tampilkan Menu Navigasi Bawah
+    show('bottomNav');
+
+    // Tampilkan Tab yang dipilih
+    if (tabName === 'home') {
+        show('home-view');
+        document.getElementById('tab-home').classList.add('active');
+        // Jika Home masih kosong, load data
+        if (document.getElementById('home-view').innerHTML === '') {
+            loadLatest();
+        } else {
+            // Re-init slider jika sudah pernah load
+            const wrapper = document.getElementById('heroWrapper');
+            if (wrapper && !sliderInterval) {
+                // restart interval simple
+                const totalSlides = document.querySelectorAll('.hero-slide').length;
+                let currentSlide = 0;
+                sliderInterval = setInterval(() => {
+                    currentSlide++;
+                    wrapper.style.transition = 'transform 0.5s ease-in-out';
+                    wrapper.style.transform = `translateX(-${currentSlide * 100}%)`;
+                    if (currentSlide >= totalSlides - 1) {
+                        setTimeout(() => {
+                            wrapper.style.transition = 'none';
+                            currentSlide = 0;
+                            wrapper.style.transform = `translateX(0)`;
+                        }, 500); 
+                    }
+                }, 5000);
+            }
+        }
+    } else if (tabName === 'search') {
+        show('search-view');
+        document.getElementById('tab-search').classList.add('active');
+        // Auto focus ke input pencarian
+        document.getElementById('searchInput').focus();
+    } else if (tabName === 'profile') {
+        show('profile-view');
+        document.getElementById('tab-profile').classList.add('active');
+    }
+}
+
+// --- FUNGSI LOAD HOME ---
+async function loadLatest() {
+    loader(true);
     const homeContainer = document.getElementById('home-view');
-    homeContainer.innerHTML = ''; // Reset konten
+    homeContainer.innerHTML = ''; 
 
     try {
-        // Loop setiap section yang ada di konfigurasi
-        for (const section of HOME_SECTIONS) {
-            let combinedData = [];
+        const sliderSection = HOME_SECTIONS[0]; 
+        let sliderData = [];
 
-            if (section.mode === 'latest') {
-                // Fetch Endpoint Latest (Khusus Trending)
+        try {
+            const res = await fetch(`${API_BASE}/latest`);
+            sliderData = await res.json();
+        } catch (e) { 
+            console.error("Gagal load slider", e); 
+        }
+
+        if (sliderData && sliderData.length > 0) {
+            const top10 = sliderData.slice(0, 10);
+            renderHeroSlider(sliderSection.title, top10, homeContainer);
+            loader(false); 
+
+            top10.forEach(async (item) => {
                 try {
-                    const res = await fetch(`${API_BASE}/latest`);
-                    combinedData = await res.json();
-                } catch (e) { console.error("Gagal load latest", e); }
-            } else {
-                // Fetch Multi-Query (Gabungkan hasil dari beberapa kata kunci)
-                // Kita gunakan Promise.all agar semua request berjalan bersamaan (cepat)
+                    const detailRes = await fetch(`${API_BASE}/detail?url=${encodeURIComponent(item.url)}`);
+                    const detailData = await detailRes.json();
+                    if (detailData && detailData.info) {
+                        const score = detailData.info.skor || detailData.info.score || 'N/A';
+                        const type = detailData.info.tipe || detailData.info.type || 'Anime';
+                        const musim = detailData.info.musim || detailData.info.season || '';
+                        const rilis = detailData.info.dirilis || detailData.info.released || '';
+                        const year = `${musim} ${rilis}`.trim() || 'Unknown';
+                        
+                        const metaElements = document.querySelectorAll(`.hero-meta[data-url="${item.url}"]`);
+                        metaElements.forEach(el => {
+                            el.innerHTML = `<span>⭐ ${score}</span> • <span>${type}</span> • <span>${year}</span>`;
+                        });
+                    }
+                } catch (e) {}
+            });
+        } else {
+            loader(false);
+        }
+
+        for (let i = 1; i < HOME_SECTIONS.length; i++) {
+            const section = HOME_SECTIONS[i];
+            (async () => {
+                let combinedData = [];
                 const promises = section.queries.map(q => 
                     fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`)
                         .then(res => res.json())
                         .catch(() => [])
                 );
-
                 const results = await Promise.all(promises);
-                
-                // Gabungkan semua array hasil pencarian menjadi satu array besar
                 results.forEach(list => {
                     if(Array.isArray(list)) combinedData = [...combinedData, ...list];
                 });
-
-                // Hapus Duplikat (Karena mungkin 1 anime muncul di 2 kata kunci berbeda)
                 combinedData = removeDuplicates(combinedData, 'url');
-            }
 
-            // Render hanya jika ada data
-            // Jika data kurang dari 5, kita duplikasi agar tampilan tetap penuh (Visual Hack)
-            if (combinedData && combinedData.length > 0) {
-                // Jika item kurang dari 6, duplikasi list tersebut agar scroll horizontal terlihat bagus
-                if (combinedData.length < 6) {
-                    combinedData = [...combinedData, ...combinedData, ...combinedData]; 
+                if (combinedData.length > 0) {
+                    if (combinedData.length < 6) combinedData = [...combinedData, ...combinedData, ...combinedData];
+                    renderSection(section.title, combinedData.slice(0, 15), homeContainer);
                 }
-                
-                // Limit maksimal 15 item agar tidak terlalu berat loading gambarnya
-                renderSection(section.title, combinedData.slice(0, 15), homeContainer);
-            }
+            })();
         }
-
     } catch (err) {
         console.error(err);
-    } finally {
         loader(false);
     }
 }
 
-// Fungsi Helper Hapus Duplikat
 function removeDuplicates(array, key) {
     return [ ...new Map(array.map(item => [item[key], item])).values() ];
 }
 
-// Fungsi Render Satu Section (Horizontal Scroll)
+function renderHeroSlider(title, data, container) {
+    const sectionContainer = document.createElement('div');
+    sectionContainer.className = 'hero-section-container';
+
+    const sliderDiv = document.createElement('div');
+    sliderDiv.className = 'hero-slider';
+
+    const loopData = [...data, data[0]];
+
+    const slidesHtml = loopData.map((anime, index) => {
+        const score = anime.score || 'N/A';
+        const type = anime.type || 'Anime';
+        const year = anime.year || 'Unknown';
+        
+        let epNumMatch = anime.episode ? anime.episode.match(/\d+(\.\d+)?/) : null;
+        let eps = epNumMatch ? `Ep ${epNumMatch[0]}` : (anime.episode ? `Ep ${anime.episode}` : '');
+
+        return `
+            <div class="hero-slide">
+                <img src="${anime.image}" class="hero-bg" alt="${anime.title}" loading="${index === 0 ? 'eager' : 'lazy'}">
+                <div class="hero-overlay"></div>
+                <div class="hero-content">
+                    ${eps ? `<div class="hero-badge">${eps}</div>` : ''}
+                    <h2 class="hero-title">${anime.title}</h2>
+                    <div class="hero-meta" data-url="${anime.url}">
+                        <span>⭐ ${score}</span> • <span>${type}</span> • <span>${year}</span>
+                    </div>
+                    <button onclick="loadDetail('${anime.url}')" class="hero-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        Nonton Sekarang
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    sliderDiv.innerHTML = `<div class="hero-wrapper" id="heroWrapper">${slidesHtml}</div>`;
+    sectionContainer.appendChild(sliderDiv);
+    
+    if (container.firstChild) {
+        container.insertBefore(sectionContainer, container.firstChild);
+    } else {
+        container.appendChild(sectionContainer);
+    }
+
+    const wrapper = document.getElementById('heroWrapper');
+    let currentSlide = 0;
+    const totalSlides = loopData.length;
+
+    if (sliderInterval) clearInterval(sliderInterval);
+
+    sliderInterval = setInterval(() => {
+        if (!wrapper || document.getElementById('home-view').classList.contains('hidden')) return;
+        
+        currentSlide++;
+        wrapper.style.transition = 'transform 0.5s ease-in-out';
+        wrapper.style.transform = `translateX(-${currentSlide * 100}%)`;
+
+        if (currentSlide === totalSlides - 1) {
+            setTimeout(() => {
+                if (!wrapper) return;
+                wrapper.style.transition = 'none';
+                currentSlide = 0;
+                wrapper.style.transform = `translateX(0)`;
+            }, 500); 
+        }
+    }, 5000); 
+}
+
 function renderSection(title, data, container) {
-    // Buat elemen section
     const sectionDiv = document.createElement('div');
     sectionDiv.className = 'category-section';
 
-    // Tentukan kata kunci pencarian untuk tombol "Lainnya"
-    // Ambil kata kunci pertama dari array atau judul
     const searchKeyword = title.split(' ')[0];
 
-    // Buat Header (Judul + Tombol More)
     const headerHtml = `
         <div class="header-flex">
             <div class="section-header">
@@ -126,9 +244,7 @@ function renderSection(title, data, container) {
         </div>
     `;
 
-    // Buat Container Scroll Horizontal
     const cardsHtml = data.map(anime => {
-        // Normalisasi data
         const eps = anime.episode || anime.score || '?'; 
         const displayTitle = anime.title.length > 35 ? anime.title.substring(0, 35) + '...' : anime.title;
         
@@ -147,35 +263,32 @@ function renderSection(title, data, container) {
     container.appendChild(sectionDiv);
 }
 
-// --- PENCARIAN (Grid View) ---
+// --- FUNGSI PENCARIAN (UPDATED KE SEARCH VIEW) ---
 async function handleSearch(manualQuery = null) {
     const searchInput = document.getElementById('searchInput');
     const query = manualQuery || searchInput.value;
     
-    if (!query) return loadLatest();
+    // Jika tombol 'Lainnya' ditekan, ganti ke tab Search otomatis
+    if (manualQuery) {
+        switchTab('search');
+        searchInput.value = manualQuery;
+    }
     
-    if(manualQuery) searchInput.value = manualQuery;
+    if (!query) return;
 
     loader(true);
     try {
         const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
         const data = await res.json();
         
-        hide('detail-view');
-        hide('watch-view');
-        show('home-view');
-
-        const homeContainer = document.getElementById('home-view');
-        homeContainer.innerHTML = ''; 
+        // Render ke div khusus pencarian
+        const searchContainer = document.getElementById('search-results-container');
+        searchContainer.innerHTML = ''; 
 
         const resultSection = document.createElement('div');
         resultSection.className = 'search-results-container';
         
         resultSection.innerHTML = `
-            <div class="section-header mt-large">
-                <div class="bar-accent"></div>
-                <h2>Hasil Pencarian: "${query}"</h2>
-            </div>
             <div class="anime-grid">
                 ${data.map(anime => `
                     <div class="scroll-card" onclick="loadDetail('${anime.url}')" style="min-width: auto; max-width: none;">
@@ -189,7 +302,7 @@ async function handleSearch(manualQuery = null) {
             </div>
         `;
         
-        homeContainer.appendChild(resultSection);
+        searchContainer.appendChild(resultSection);
 
     } catch (err) {
         console.error(err);
@@ -198,37 +311,131 @@ async function handleSearch(manualQuery = null) {
     }
 }
 
-// --- DETAIL ANIME ---
 async function loadDetail(url) {
     loader(true);
     try {
         const res = await fetch(`${API_BASE}/detail?url=${encodeURIComponent(url)}`);
         const data = await res.json();
         
+        // Sembunyikan Navigasi Bawah saat masuk ke halaman detail
+        hide('bottomNav');
         hide('home-view');
+        hide('search-view');
+        hide('profile-view');
         hide('watch-view');
         show('detail-view');
 
+        const info = data.info || {};
+        const status = info.status || 'Ongoing';
+        const score = info.skor || info.score || '0';
+        const type = info.tipe || info.type || 'TV';
+        const studio = "NimeStream"; 
+        const totalEps = info.total_episode || info.episode || '?';
+        const duration = info.durasi || info.duration || '0 Menit';
+        const musim = info.musim || info.season || '';
+        const rilis = info.dirilis || info.released || '';
+        const seasonInfo = `${musim} ${rilis}`.trim() || 'Unknown Date';
+
+        const genreText = info.genre || info.genres || '';
+        const genres = genreText ? genreText.split(',').map(g => g.trim()) : ['Anime'];
+
+        const isEpsExist = data.episodes && data.episodes.length > 0;
+        const newestEpUrl = isEpsExist ? data.episodes[0].url : '';
+        const oldestEpUrl = isEpsExist ? data.episodes[data.episodes.length - 1].url : '';
+        
+        let newestEpNum = '?';
+        let totalEpCount = isEpsExist ? data.episodes.length : 0;
+        
+        if (isEpsExist) {
+            let firstEpTitle = data.episodes[0].title;
+            let match = firstEpTitle.match(/(?:Episode|Eps|Ep)\s*(\d+(\.\d+)?)/i);
+            if (match) {
+                newestEpNum = match[1];
+            } else {
+                let nums = firstEpTitle.match(/\d+/g);
+                newestEpNum = nums ? nums[nums.length - 1] : totalEpCount;
+            }
+        }
+
+        const playIcon = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+
         document.getElementById('anime-info').innerHTML = `
-            <div class="detail-header">
-                <img src="${data.image}" class="detail-poster">
-                <div class="detail-text">
-                    <h1>${data.title}</h1>
-                    <div class="detail-meta">
-                        <span>${data.info.genre || 'Anime'}</span> • <span>${data.info.status || 'Ongoing'}</span>
-                    </div>
-                    <p class="desc">${data.description || 'Tidak ada deskripsi.'}</p>
+            <div class="detail-breadcrumb">Detail / ${data.title}</div>
+            <h1 class="detail-title">${data.title}</h1>
+            <div class="detail-subtitle">${info.japanese || data.title}</div>
+
+            <div class="detail-main-layout">
+                <div class="detail-poster">
+                    <img src="${data.image}" alt="${data.title}">
                 </div>
+                
+                <div class="detail-info-col">
+                    <div class="detail-badges">
+                        <span class="badge status">${status.replace(' ', '_')}</span>
+                        <span class="badge score">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> 
+                            ${score}
+                        </span>
+                        <span class="badge type">${type}</span>
+                    </div>
+
+                    <div class="detail-genres">
+                        ${genres.map(g => `<span class="genre-tag">${g}</span>`).join('')}
+                    </div>
+
+                    <div class="detail-season">${seasonInfo.toUpperCase()}</div>
+
+                    <p class="detail-synopsis">${data.description || 'Tidak ada deskripsi tersedia.'}</p>
+
+                    <div class="detail-actions">
+                        <button class="btn-action" onclick="${oldestEpUrl ? `loadVideo('${oldestEpUrl}')` : `alert('Belum ada episode')`}">
+                            ${playIcon} Nonton
+                        </button>
+                        <button class="btn-action" onclick="${newestEpUrl ? `loadVideo('${newestEpUrl}')` : `alert('Belum ada episode')`}">
+                            ${playIcon} Terbaru (${newestEpNum})
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="metadata-grid">
+                <div class="meta-item">
+                    <span class="meta-label">STUDIO</span>
+                    <span class="meta-pill">${studio.toUpperCase()}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">TOTAL EPS</span>
+                    <span class="meta-value">${totalEps}</span>
+                </div>
+                <div class="meta-item" style="grid-column: span 2;">
+                    <span class="meta-label">DURASI</span>
+                    <span class="meta-value">${duration}</span>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('episode-header-container').innerHTML = `
+            <div class="ep-header-wrapper">
+                <h2 class="ep-header-title">Daftar Episode</h2>
+                ${isEpsExist ? `<div class="ep-range-badge">1 - ${newestEpNum}</div>` : ''}
             </div>
         `;
 
         const epGrid = document.getElementById('episode-grid');
         epGrid.innerHTML = data.episodes.map(ep => {
-            let epNum = ep.title.match(/Episode\s+(\d+)/i);
-            let displayTitle = epNum ? epNum[1] : ep.title.replace('Episode', '').trim();
-            if(displayTitle.length > 5) displayTitle = 'Ep'; 
+            let displayTitle = '';
+            let epNumMatch = ep.title.match(/(?:Episode|Eps|Ep)\s*(\d+(\.\d+)?)/i);
+            
+            if (epNumMatch) {
+                displayTitle = epNumMatch[1];
+            } else {
+                let nums = ep.title.match(/\d+/g);
+                displayTitle = nums ? nums[nums.length - 1] : ep.title;
+            }
+            
+            if (displayTitle.length > 12) displayTitle = displayTitle.substring(0, 10) + '...';
 
-            return `<div class="ep-box" onclick="loadVideo('${ep.url}')">${displayTitle}</div>`;
+            return `<div class="ep-box" title="${ep.title}" onclick="loadVideo('${ep.url}')">${displayTitle}</div>`;
         }).join('');
 
     } catch (err) {
@@ -238,7 +445,6 @@ async function loadDetail(url) {
     }
 }
 
-// --- NONTON VIDEO ---
 async function loadVideo(url) {
     loader(true);
     try {
@@ -247,6 +453,7 @@ async function loadVideo(url) {
 
         hide('detail-view');
         show('watch-view');
+        hide('bottomNav'); // Pastikan Nav Bawah tersembunyi saat nonton
 
         document.getElementById('video-title').innerText = data.title;
         
@@ -279,24 +486,22 @@ function changeServer(url, btn) {
     btn.classList.add('active');
 }
 
-// Navigasi
-function goHome() { loadLatest(); }
+function goHome() { 
+    // Saat tombol kembali ditekan, kita panggil switchTab home agar bottom nav muncul lagi
+    switchTab('home'); 
+}
+
 function backToDetail() {
     hide('watch-view');
     show('detail-view');
     document.getElementById('video-player').src = ''; 
 }
 
-// Sidebar
-function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
-    sidebar.classList.toggle('active');
-    overlay.classList.toggle('active');
-}
+// Inisialisasi Pertama
+document.addEventListener('DOMContentLoaded', () => {
+    switchTab('home'); // Otomatis buka Home & Load Data
+});
 
-// Init
-document.addEventListener('DOMContentLoaded', loadLatest);
 document.getElementById('searchInput').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleSearch();
 });
