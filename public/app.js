@@ -1,6 +1,6 @@
 const API_BASE = '/api'; 
 
-// --- INDEXEDDB UNTUK HISTORY (PENYIMPANAN LOKAL) ---
+// --- INDEXEDDB UNTUK HISTORY ---
 const DB_NAME = 'NimeStreamDB';
 const STORE_NAME = 'history';
 
@@ -36,7 +36,6 @@ async function getHistory() {
             const store = tx.objectStore(STORE_NAME);
             const req = store.getAll();
             req.onsuccess = () => {
-                // Urutkan dari yang terbaru dilihat
                 resolve(req.result.sort((a,b) => b.timestamp - a.timestamp));
             };
             req.onerror = () => reject(req.error);
@@ -55,10 +54,52 @@ const HOME_SECTIONS = [
     { title: "Comedy & Chill 😂", queries: ["comedy", "slice of life", "bocchi", "spy"] }
 ];
 
-// Daftar Kategori yang akan ditampilkan di tab Anime
-const KATEGORI_LIST = ["Action", "Adventure", "Comedy", "Drama", "Fantasy", "Isekai", "Magic", "Romance", "School", "Sci-Fi", "Slice of Life", "Sports"];
+// MAPPING KATA KUNCI AGAR HASIL KATEGORI MELIMPAH
+const GENRE_KEYWORDS = {
+    "Action": ["action", "shounen", "fight", "jujutsu", "kimetsu"],
+    "Adventure": ["adventure", "journey", "world", "isekai"],
+    "Comedy": ["comedy", "slice of life", "laugh", "bocchi"],
+    "Drama": ["drama", "cry", "love", "romance", "kanojo"],
+    "Fantasy": ["fantasy", "magic", "maou", "dragon", "hero"],
+    "Isekai": ["isekai", "reincarnation", "world", "slime", "tensei"],
+    "Magic": ["magic", "mahou", "witch", "wizard"],
+    "Romance": ["romance", "love", "kanojo", "couple"],
+    "School": ["school", "gakuen", "classroom", "student"],
+    "Sci-Fi": ["sci-fi", "science", "gundam", "mecha"],
+    "Slice of Life": ["slice of life", "daily", "chill", "camp"],
+    "Sports": ["sports", "soccer", "football", "blue lock", "haikyuu"]
+};
 
+const KATEGORI_LIST = Object.keys(GENRE_KEYWORDS);
 let sliderInterval;
+
+// --- TEMA GELAP / TERANG (LIGHT/DARK MODE) ---
+function toggleTheme() {
+    const body = document.documentElement;
+    const currentTheme = body.getAttribute('data-theme');
+    
+    // Icon SVG
+    const moonIcon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+    const sunIcon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
+
+    const btn = document.getElementById('themeBtn');
+
+    if(currentTheme === 'light') {
+        body.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'dark');
+        btn.innerHTML = moonIcon;
+    } else {
+        body.setAttribute('data-theme', 'light');
+        localStorage.setItem('theme', 'light');
+        btn.innerHTML = sunIcon;
+    }
+}
+
+// Inisialisasi Tema
+if(localStorage.getItem('theme') === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.getElementById('themeBtn').innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
+}
 
 const show = (id) => {
     const el = document.getElementById(id);
@@ -75,7 +116,6 @@ const hide = (id) => {
 
 const loader = (state) => state ? show('loading') : hide('loading');
 
-// --- FUNGSI TAB BAWAH (BOTTOM NAV) ---
 function switchTab(tabName) {
     hide('home-view');
     hide('anime-view');
@@ -115,11 +155,11 @@ function switchTab(tabName) {
     } else if (tabName === 'anime') {
         show('anime-view');
         document.getElementById('tab-anime').classList.add('active');
-        renderCategoryPage(); // Panggil fungsi render kategori
+        renderCategoryPage(); 
     } else if (tabName === 'recent') {
         show('recent-view');
         document.getElementById('tab-recent').classList.add('active');
-        loadRecentHistory(); // Panggil fungsi render histori
+        loadRecentHistory(); 
     } else if (tabName === 'schedule') {
         show('schedule-view');
         document.getElementById('tab-schedule').classList.add('active');
@@ -129,7 +169,7 @@ function switchTab(tabName) {
     }
 }
 
-// --- FUNGSI HALAMAN KATEGORI (ANIME) ---
+// --- FUNGSI KATEGORI YG DIUPDATE MENGGUNAKAN MULTI-KEYWORD ---
 function renderCategoryPage() {
     const grid = document.getElementById('genre-grid');
     if (grid.innerHTML !== '') return; 
@@ -138,7 +178,6 @@ function renderCategoryPage() {
         <button class="genre-btn" onclick="loadCategory('${genre}', this)">${genre}</button>
     `).join('');
     
-    // Auto load kategori pertama
     loadCategory(KATEGORI_LIST[0], grid.firstElementChild);
 }
 
@@ -148,12 +187,25 @@ async function loadCategory(genre, btnElement) {
 
     loader(true);
     try {
-        const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(genre)}`);
-        const data = await res.json();
+        let combinedData = [];
+        const queriesToFetch = GENRE_KEYWORDS[genre] || [genre];
+
+        const promises = queriesToFetch.map(q => 
+            fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`)
+                .then(res => res.json())
+                .catch(() => [])
+        );
+
+        const results = await Promise.all(promises);
+        results.forEach(list => {
+            if(Array.isArray(list)) combinedData = [...combinedData, ...list];
+        });
+        
+        combinedData = removeDuplicates(combinedData, 'url');
         
         const container = document.getElementById('category-results-container');
-        if(!data || data.length === 0) {
-            container.innerHTML = '<p style="text-align:center; color:#888; margin-top:20px;">Tidak ada anime ditemukan.</p>';
+        if(!combinedData || combinedData.length === 0) {
+            container.innerHTML = '<p style="text-align:center; color:var(--text-muted); margin-top:20px;">Tidak ada anime ditemukan.</p>';
             return;
         }
 
@@ -163,7 +215,7 @@ async function loadCategory(genre, btnElement) {
                 <h2>Anime ${genre}</h2>
             </div>
             <div class="anime-grid">
-                ${data.map(anime => `
+                ${combinedData.map(anime => `
                     <div class="scroll-card" onclick="loadDetail('${anime.url}')" style="min-width: auto; max-width: none;">
                         <div class="scroll-card-img">
                             <img src="${anime.image}" alt="${anime.title}" loading="lazy">
@@ -181,7 +233,6 @@ async function loadCategory(genre, btnElement) {
     }
 }
 
-// --- FUNGSI HALAMAN RIWAYAT (RECENT) ---
 async function loadRecentHistory() {
     const container = document.getElementById('recent-results-container');
     container.innerHTML = '<div class="spinner"></div>';
@@ -191,7 +242,7 @@ async function loadRecentHistory() {
     if (!historyData || historyData.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
-                <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="2" style="margin-bottom:15px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" style="margin-bottom:15px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                 <h2>Belum ada riwayat</h2>
                 <p>Anime yang baru saja kamu lihat akan muncul di sini.</p>
             </div>`;
@@ -213,7 +264,6 @@ async function loadRecentHistory() {
     `;
 }
 
-// --- FUNGSI LOAD HOME ---
 async function loadLatest() {
     loader(true);
     const homeContainer = document.getElementById('home-view');
@@ -404,7 +454,7 @@ async function handleSearch(manualQuery = null) {
         return;
     }
 
-    // Tampilkan di Home
+    // Ubah hasil pencarian dirender di home view
     switchTab('home');
 
     loader(true);
@@ -492,7 +542,6 @@ async function loadDetail(url) {
             }
         }
 
-        // SIMPAN KE HISTORY INDEXEDDB
         saveHistory({
             url: url,
             title: data.title,
@@ -639,7 +688,6 @@ function backToDetail() {
     document.getElementById('video-player').src = ''; 
 }
 
-// Inisiasi Pertama Saat Buka Web
 document.addEventListener('DOMContentLoaded', () => {
     switchTab('home'); 
 });
