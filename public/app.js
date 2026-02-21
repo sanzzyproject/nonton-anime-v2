@@ -1,5 +1,50 @@
 const API_BASE = '/api'; 
 
+// --- INDEXEDDB UNTUK HISTORY (PENYIMPANAN LOKAL) ---
+const DB_NAME = 'NimeStreamDB';
+const STORE_NAME = 'history';
+
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'url' });
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function saveHistory(animeObj) {
+    try {
+        const db = await initDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        animeObj.timestamp = Date.now();
+        store.put(animeObj);
+    } catch(e) { console.error("History save error", e); }
+}
+
+async function getHistory() {
+    try {
+        const db = await initDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const req = store.getAll();
+            req.onsuccess = () => {
+                // Urutkan dari yang terbaru dilihat
+                resolve(req.result.sort((a,b) => b.timestamp - a.timestamp));
+            };
+            req.onerror = () => reject(req.error);
+        });
+    } catch(e) { return []; }
+}
+// ----------------------------------------------------
+
 const HOME_SECTIONS = [
     { title: "Sedang Hangat 🔥", mode: "latest" },
     { title: "Isekai & Fantasy 🌀", queries: ["isekai", "reincarnation", "world", "maou"] },
@@ -9,6 +54,9 @@ const HOME_SECTIONS = [
     { title: "Magic & Adventure ✨", queries: ["magic", "adventure", "dragon", "dungeon"] },
     { title: "Comedy & Chill 😂", queries: ["comedy", "slice of life", "bocchi", "spy"] }
 ];
+
+// Daftar Kategori yang akan ditampilkan di tab Anime
+const KATEGORI_LIST = ["Action", "Adventure", "Comedy", "Drama", "Fantasy", "Isekai", "Magic", "Romance", "School", "Sci-Fi", "Slice of Life", "Sports"];
 
 let sliderInterval;
 
@@ -20,7 +68,6 @@ const show = (id) => {
 const hide = (id) => {
     const el = document.getElementById(id);
     if(el) el.classList.add('hidden');
-    // Stop slider jika halaman home disembunyikan
     if (id === 'home-view' && sliderInterval) {
         clearInterval(sliderInterval);
     }
@@ -28,9 +75,8 @@ const hide = (id) => {
 
 const loader = (state) => state ? show('loading') : hide('loading');
 
-// --- FUNGSI TAB BAWAH (BOTTOM NAV) BARU ---
+// --- FUNGSI TAB BAWAH (BOTTOM NAV) ---
 function switchTab(tabName) {
-    // Sembunyikan semua halaman utama
     hide('home-view');
     hide('anime-view');
     hide('recent-view');
@@ -39,22 +85,15 @@ function switchTab(tabName) {
     hide('detail-view');
     hide('watch-view');
 
-    // Kembalikan status Bottom Nav agar muncul
     show('bottomNav');
-
-    // Hapus efek aktif di semua tombol
     document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
 
-    // Aktifkan tab yang diklik
     if (tabName === 'home') {
         show('home-view');
         document.getElementById('tab-home').classList.add('active');
-        
-        // Auto Load Jika masih kosong
         if (document.getElementById('home-view').innerHTML === '') {
             loadLatest();
         } else {
-            // Jalankan ulang animasi slider jika data sudah ada
             const wrapper = document.getElementById('heroWrapper');
             if (wrapper && !sliderInterval) {
                 const totalSlides = document.querySelectorAll('.hero-slide').length;
@@ -76,9 +115,11 @@ function switchTab(tabName) {
     } else if (tabName === 'anime') {
         show('anime-view');
         document.getElementById('tab-anime').classList.add('active');
+        renderCategoryPage(); // Panggil fungsi render kategori
     } else if (tabName === 'recent') {
         show('recent-view');
         document.getElementById('tab-recent').classList.add('active');
+        loadRecentHistory(); // Panggil fungsi render histori
     } else if (tabName === 'schedule') {
         show('schedule-view');
         document.getElementById('tab-schedule').classList.add('active');
@@ -86,6 +127,90 @@ function switchTab(tabName) {
         show('profile-view');
         document.getElementById('tab-profile').classList.add('active');
     }
+}
+
+// --- FUNGSI HALAMAN KATEGORI (ANIME) ---
+function renderCategoryPage() {
+    const grid = document.getElementById('genre-grid');
+    if (grid.innerHTML !== '') return; 
+    
+    grid.innerHTML = KATEGORI_LIST.map(genre => `
+        <button class="genre-btn" onclick="loadCategory('${genre}', this)">${genre}</button>
+    `).join('');
+    
+    // Auto load kategori pertama
+    loadCategory(KATEGORI_LIST[0], grid.firstElementChild);
+}
+
+async function loadCategory(genre, btnElement) {
+    document.querySelectorAll('.genre-btn').forEach(btn => btn.classList.remove('active'));
+    if(btnElement) btnElement.classList.add('active');
+
+    loader(true);
+    try {
+        const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(genre)}`);
+        const data = await res.json();
+        
+        const container = document.getElementById('category-results-container');
+        if(!data || data.length === 0) {
+            container.innerHTML = '<p style="text-align:center; color:#888; margin-top:20px;">Tidak ada anime ditemukan.</p>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="section-header mt-large">
+                <div class="bar-accent"></div>
+                <h2>Anime ${genre}</h2>
+            </div>
+            <div class="anime-grid">
+                ${data.map(anime => `
+                    <div class="scroll-card" onclick="loadDetail('${anime.url}')" style="min-width: auto; max-width: none;">
+                        <div class="scroll-card-img">
+                            <img src="${anime.image}" alt="${anime.title}" loading="lazy">
+                            <div class="ep-badge">Ep ${anime.score || '?'}</div>
+                        </div>
+                        <h3 class="scroll-card-title">${anime.title}</h3>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } catch (err) {
+        console.error(err);
+    } finally {
+        loader(false);
+    }
+}
+
+// --- FUNGSI HALAMAN RIWAYAT (RECENT) ---
+async function loadRecentHistory() {
+    const container = document.getElementById('recent-results-container');
+    container.innerHTML = '<div class="spinner"></div>';
+    
+    const historyData = await getHistory();
+    
+    if (!historyData || historyData.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="2" style="margin-bottom:15px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <h2>Belum ada riwayat</h2>
+                <p>Anime yang baru saja kamu lihat akan muncul di sini.</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="anime-grid">
+            ${historyData.map(anime => `
+                <div class="scroll-card" onclick="loadDetail('${anime.url}')" style="min-width: auto; max-width: none;">
+                    <div class="scroll-card-img">
+                        <img src="${anime.image}" alt="${anime.title}" loading="lazy">
+                        <div class="ep-badge">⭐ ${anime.score || '?'}</div>
+                    </div>
+                    <h3 class="scroll-card-title">${anime.title}</h3>
+                </div>
+            `).join('')}
+        </div>
+    `;
 }
 
 // --- FUNGSI LOAD HOME ---
@@ -101,9 +226,7 @@ async function loadLatest() {
         try {
             const res = await fetch(`${API_BASE}/latest`);
             sliderData = await res.json();
-        } catch (e) { 
-            console.error("Gagal load slider", e); 
-        }
+        } catch (e) { console.error("Gagal load slider", e); }
 
         if (sliderData && sliderData.length > 0) {
             const top10 = sliderData.slice(0, 10);
@@ -267,7 +390,7 @@ function renderSection(title, data, container) {
     container.appendChild(sectionDiv);
 }
 
-// --- FUNGSI SEARCH YANG SUDAH DIUPDATE ---
+// --- FUNGSI SEARCH ---
 async function handleSearch(manualQuery = null) {
     const searchInput = document.getElementById('searchInput');
     const query = manualQuery || searchInput.value;
@@ -276,13 +399,12 @@ async function handleSearch(manualQuery = null) {
         searchInput.value = manualQuery;
     }
     
-    // Jika input kosong, muat ulang Beranda (Home)
     if (!query) {
         switchTab('home');
         return;
     }
 
-    // Pastikan masuk ke Tab Home saat hasil pencarian ditampilkan
+    // Tampilkan di Home
     switchTab('home');
 
     loader(true);
@@ -329,7 +451,6 @@ async function loadDetail(url) {
         const res = await fetch(`${API_BASE}/detail?url=${encodeURIComponent(url)}`);
         const data = await res.json();
         
-        // Sembunyikan semua & hilangkan Bottom Nav saat masuk Detail
         hide('home-view');
         hide('anime-view');
         hide('recent-view');
@@ -370,6 +491,14 @@ async function loadDetail(url) {
                 newestEpNum = nums ? nums[nums.length - 1] : totalEpCount;
             }
         }
+
+        // SIMPAN KE HISTORY INDEXEDDB
+        saveHistory({
+            url: url,
+            title: data.title,
+            image: data.image,
+            score: score
+        });
 
         const playIcon = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
 
@@ -467,7 +596,7 @@ async function loadVideo(url) {
 
         hide('detail-view');
         show('watch-view');
-        hide('bottomNav'); // Pastikan Nav Bawah tetap hilang saat play video
+        hide('bottomNav'); 
 
         document.getElementById('video-title').innerText = data.title;
         
@@ -501,7 +630,6 @@ function changeServer(url, btn) {
 }
 
 function goHome() { 
-    // Kembali dari Halaman Detail ke Tab Utama
     switchTab('home'); 
 }
 
@@ -513,7 +641,7 @@ function backToDetail() {
 
 // Inisiasi Pertama Saat Buka Web
 document.addEventListener('DOMContentLoaded', () => {
-    switchTab('home'); // Buka halaman Home dan otomatis load data
+    switchTab('home'); 
 });
 
 document.getElementById('searchInput').addEventListener('keypress', (e) => {
