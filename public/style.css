@@ -27,7 +27,6 @@ body {
     min-height: 100vh;
 }
 
-/* --- NAVBAR ATAS (BARU: LAYOUT LOGO & PENCARIAN) --- */
 .navbar {
     position: fixed;
     top: 0; left: 0; right: 0;
@@ -82,7 +81,7 @@ body {
 .search-text-btn {
     background: transparent;
     border: none;
-    color: var(--primary); /* Mengikuti warna tema, bukan kuning */
+    color: var(--primary);
     font-weight: 700;
     font-size: 0.95rem;
     cursor: pointer;
@@ -90,16 +89,14 @@ body {
     font-family: 'Outfit', sans-serif;
 }
 
-/* --- MAIN LAYOUT --- */
 main {
     max-width: 100%;
     margin: 0 auto;
-    padding: 10px 0 100px; /* Ruang ekstra bawah agar tidak tertutup Bottom Nav */
+    padding: 10px 0 100px; 
     flex: 1;
     width: 100%;
 }
 
-/* --- BOTTOM NAV (5 MENU APLIKASI MODERN) --- */
 .bottom-nav {
     position: fixed;
     bottom: 0; left: 0; right: 0;
@@ -130,7 +127,7 @@ main {
     font-family: 'Outfit', sans-serif;
     cursor: pointer;
     transition: all 0.3s ease;
-    width: 20%; /* 5 menu terbagi rata */
+    width: 20%; 
 }
 .nav-item svg {
     transition: transform 0.3s ease, stroke 0.3s;
@@ -142,7 +139,6 @@ main {
     transform: translateY(-2px);
 }
 
-/* Placeholder Empty State untuk Tab Baru */
 .empty-state {
     padding: 60px 20px;
     text-align: center;
@@ -150,7 +146,6 @@ main {
 }
 .empty-state h2 { font-size: 1.5rem; margin-bottom: 10px; color: white; }
 
-/* --- HALAMAN ACCOUNT / PROFIL --- */
 #profile-view { padding: 0 20px; }
 .profile-container { max-width: 600px; margin: 0 auto; }
 .page-title { font-size: 1.8rem; font-weight: 700; color: white; margin-bottom: 25px; }
@@ -173,7 +168,6 @@ main {
 }
 .wa-btn:hover { background: #1ebc57; }
 
-/* --- HOME SECTIONS STYLE (TIDAK DIUBAH) --- */
 .category-section { margin-bottom: 40px; padding-left: 20px; }
 .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-right: 20px; }
 .section-header { display: flex; align-items: center; gap: 10px; }
@@ -200,7 +194,6 @@ h2, h3 { font-size: 1.25rem; font-weight: 700; color: white; }
 .search-results-container { padding: 0 20px 30px; }
 .anime-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; margin-top: 20px; }
 
-/* --- DETAIL & WATCH (TIDAK DIUBAH) --- */
 #detail-view, #watch-view { padding: 0 20px; max-width: 1200px; margin: 0 auto; }
 .hidden { display: none !important; }
 
@@ -258,7 +251,6 @@ h2, h3 { font-size: 1.25rem; font-weight: 700; color: white; }
     .btn-action { padding: 10px 5px; font-size: 0.85rem; }
 }
 
-/* Video Player */
 .video-wrapper { position: relative; padding-bottom: 56.25%; background: black; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-bottom: 15px; }
 .video-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
 .video-main-title { margin-bottom: 15px; font-size: 1.1rem; }
@@ -271,17 +263,15 @@ h2, h3 { font-size: 1.25rem; font-weight: 700; color: white; }
 #loading p { text-align: center; color: var(--text-muted); font-size: 0.9rem; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
-/* --- FOOTER STYLE --- */
 .site-footer {
     background-color: #000000;
-    padding: 20px 20px 100px; /* Padding bawah extra untuk Bottom Nav */
+    padding: 20px 20px 100px;
     border-top: 1px solid #1a1a1a;
     font-size: 0.9rem;
     margin-top: 20px;
 }
 .dev-credit { text-align: center; color: var(--primary); font-weight: 700; font-size: 0.85rem; letter-spacing: 1px; }
 
-/* --- HERO SLIDER STYLES (TIDAK DIUBAH) --- */
 .hero-section-container { margin-bottom: 30px; }
 .hero-slider { position: relative; width: 100%; padding-top: 56.25%; overflow: hidden; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); background: var(--bg-card); }
 .hero-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; }
@@ -302,4 +292,31 @@ h2, h3 { font-size: 1.25rem; font-weight: 700; color: white; }
     .hero-content { bottom: 15px; left: 40px; right: 40px; }
     .hero-title { font-size: 1.1rem; }
     .hero-btn { width: fit-content; padding: 6px 16px; font-size: 0.85rem; }
+}
+
+/* --- KATEGORI & RECENT STYLES (BARU) --- */
+.genre-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.genre-btn {
+    background: var(--bg-input);
+    border: 1px solid #333;
+    color: var(--text-muted);
+    padding: 10px 5px;
+    border-radius: 8px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-align: center;
+}
+.genre-btn:hover, .genre-btn.active {
+    background: var(--gradient);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
 }
