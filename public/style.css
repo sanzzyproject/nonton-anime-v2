@@ -58,27 +58,32 @@ body {
     transition: background 0.3s, border-color 0.3s;
 }
 
-/* --- FIX TOTAL PROFILE STYLE (GEMINI RING PERSIS) --- */
+/* --- FIX PROFILE STYLE: WARNA TEGAS TIDAK TERCAMPUR --- */
 .top-logo {
-    /* Ukuran total sedikit diperbesar untuk mengakomodasi ring */
     width: 46px;
     height: 46px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
 
-    /* KUNCI AGAR TIDAK "NGEPUNG": Gunakan BORDER transparan, BUKAN padding */
-    border: 3px solid transparent; /* Ketebalan ring */
+    /* 1. Border transparan sebagai wadah ring */
+    border: 3px solid transparent; 
 
-    /* Pasang gradient Gemini (Biru, Merah, Kuning, Hijau) */
-    background-image: conic-gradient(from 50deg, #4285F4, #34A853, #FBBC05, #EA4335, #4285F4);
+    /* 2. HARD STOP GRADIENT (KUNCI PERBAIKAN) */
+    /* Menggunakan persentase stop (0% 25%, 25% 50%, dst) agar warna tidak blending */
+    background-image: conic-gradient(
+        from -45deg,      /* Rotasi awal agar posisi pas */
+        #4285F4 0% 25%,   /* Biru (seperempat lingkaran tegas) */
+        #EA4335 25% 50%,  /* Merah (seperempat lingkaran tegas) */
+        #FBBC05 50% 75%,  /* Kuning (seperempat lingkaran tegas) */
+        #34A853 75% 100%  /* Hijau (seperempat lingkaran tegas) */
+    );
 
-    /* Trik agar gradient hanya muncul di area border yang transparan */
+    /* 3. Memastikan background hanya di border */
     background-origin: border-box;
-    background-clip: border-box; /* Standar */
-    -webkit-background-clip: border-box; /* Untuk Safari/Webkit */
+    background-clip: border-box;
+    -webkit-background-clip: border-box;
 
-    /* Pastikan padding 0 agar gambar mepet ke ring dalam */
     padding: 0;
     box-shadow: none;
 }
