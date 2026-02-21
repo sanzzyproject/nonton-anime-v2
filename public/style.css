@@ -58,17 +58,28 @@ body {
     transition: background 0.3s, border-color 0.3s;
 }
 
-/* --- FIX STYLE PROFILE: BORDER GRADIENT ALA GEMINI --- */
+/* --- FIX TOTAL PROFILE STYLE (GEMINI RING PERSIS) --- */
 .top-logo {
-    width: 44px;
-    height: 44px;
+    /* Ukuran total sedikit diperbesar untuk mengakomodasi ring */
+    width: 46px;
+    height: 46px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    /* Memberi jarak/padding yang akan diisi oleh background gradient */
-    padding: 2.5px; 
-    /* Gradient warna Biru, Merah, Kuning, Hijau persis Gemini */
-    background: conic-gradient(from 90deg, #4285F4, #EA4335, #FBBC05, #34A853, #4285F4);
+
+    /* KUNCI AGAR TIDAK "NGEPUNG": Gunakan BORDER transparan, BUKAN padding */
+    border: 3px solid transparent; /* Ketebalan ring */
+
+    /* Pasang gradient Gemini (Biru, Merah, Kuning, Hijau) */
+    background-image: conic-gradient(from 50deg, #4285F4, #34A853, #FBBC05, #EA4335, #4285F4);
+
+    /* Trik agar gradient hanya muncul di area border yang transparan */
+    background-origin: border-box;
+    background-clip: border-box; /* Standar */
+    -webkit-background-clip: border-box; /* Untuk Safari/Webkit */
+
+    /* Pastikan padding 0 agar gambar mepet ke ring dalam */
+    padding: 0;
     box-shadow: none;
 }
 /* ----------------------------------------------------- */
