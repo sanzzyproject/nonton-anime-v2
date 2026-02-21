@@ -1,4 +1,3 @@
-// --- REGISTRASI PWA SERVICE WORKER ---
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
@@ -14,7 +13,7 @@ const STORE_FAV = 'favorites';
 
 function initDB() {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, 2); // Upgrade versi database
+        const req = indexedDB.open(DB_NAME, 2); 
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains(STORE_HISTORY)) db.createObjectStore(STORE_HISTORY, { keyPath: 'url' });
@@ -44,7 +43,6 @@ async function getHistory() {
     } catch(e) { return []; }
 }
 
-// LOGIKA FAVORITE BARU
 async function toggleFavorite(url, title, image, score) {
     try {
         const db = await initDB();
@@ -81,7 +79,6 @@ async function getFavorites() {
         });
     } catch(e) { return []; }
 }
-// ----------------------------------------------------
 
 const HOME_SECTIONS = [
     { title: "Sedang Hangat 🔥", mode: "latest" },
@@ -143,6 +140,26 @@ const hide = (id) => {
 };
 const loader = (state) => state ? show('loading') : hide('loading');
 
+// --- FUNGSI MENGAMBIL FOLLOWER WA (REAL-TIME/PROXY) ---
+async function fetchWAFollowers() {
+    const countEl = document.getElementById('wa-follower-count');
+    if(!countEl) return;
+    try {
+        const res = await fetch(`https://cors.caliph.my.id/https://whatsapp.com/channel/0029Vb6ukqnHQbS4mKP0j80L`);
+        const html = await res.text();
+        
+        // Coba temukan angka follower dengan RegEx
+        const match = html.match(/([\d\.,]+(?:K|M)?)\s+followers/i) || html.match(/([\d\.,]+(?:K|M)?)\s+pengikut/i);
+        if (match && match[1]) {
+            countEl.innerText = match[1];
+        } else {
+            countEl.innerText = "22.2K"; // Fallback aman
+        }
+    } catch (err) {
+        countEl.innerText = "22.2K"; // Fallback jika diblokir server WA
+    }
+}
+
 function switchTab(tabName) {
     hide('home-view'); hide('anime-view'); hide('recent-view');
     hide('favorite-view'); hide('developer-view'); hide('detail-view'); hide('watch-view');
@@ -176,7 +193,9 @@ function switchTab(tabName) {
     } else if (tabName === 'favorite') {
         show('favorite-view'); document.getElementById('tab-favorite').classList.add('active'); loadFavorites(); 
     } else if (tabName === 'developer') {
-        show('developer-view'); document.getElementById('tab-developer').classList.add('active');
+        show('developer-view'); 
+        document.getElementById('tab-developer').classList.add('active');
+        fetchWAFollowers(); // Auto Load Followers
     }
 }
 
@@ -441,7 +460,6 @@ async function loadDetail(url) {
 
         saveHistory({ url: url, title: data.title, image: data.image, score: score });
 
-        // LOGIKA ICON FAVORIT BERDASARKAN STATUS INDEXEDDB
         const isFav = await checkFavorite(url);
         const favClass = isFav ? 'active' : '';
 
